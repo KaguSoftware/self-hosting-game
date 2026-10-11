@@ -8,8 +8,8 @@ import { compatible, mergeIncidents, onCallPage, onCallPool } from "./oncall";
 import type { Incident } from "@/content/schema";
 
 const VARS = { deployPassword: "test-pass-1" };
-/** On-call plays on the latest finished server: the end of the last chain level. */
-const BASE = [...LEVELS].reverse().find((l) => l.base === "chain")!.id;
+/** On-call plays on the final mission's finished server (or the last chain level before it exists). */
+const BASE = LEVELS.some((l) => l.id === "w12-01") ? "w12-01" : [...LEVELS].reverse().find((l) => l.base === "chain")!.id;
 
 function breakAndFix(inc: Incident) {
   const world = produce(replay.levelEndWorld(replay.levelById(BASE)!, VARS), inc.breakIt);

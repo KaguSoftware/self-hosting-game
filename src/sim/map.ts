@@ -340,6 +340,8 @@ export function isActionActive(w: World, a: MapAction): boolean {
     case "ciVar": {
       const v = w.gitlab?.variables.find((x) => x.key === a.key);
       const value = ciVarValue(w, a);
+      // Taking the value from a file that does not exist yet is not "on".
+      if (a.fromFile && value === null) return false;
       if (value === null) return !v;
       return !!v && v.value === value && v.type === (a.varType ?? "env_var") && v.protected === !!a.protected && v.masked === !!a.masked;
     }
