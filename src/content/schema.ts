@@ -237,6 +237,8 @@ export interface Incident {
   controls?: MapControl[];
   /** Dashboard part of the fix, applied before `fix` for show me and tests. */
   fixMap?: MapAction[];
+  /** Dashboard steps that come after the commands (retry a job once the server is fixed). */
+  fixMapAfter?: MapAction[];
   /** Can show up in On-call mode. `layer` keeps two-at-once pages from hitting the same spot. */
   oncall?: { layer: "dns" | "firewall" | "proxy" | "app" | "db" | "host" | "ssh" | "ci"; conflicts?: string[] };
 }

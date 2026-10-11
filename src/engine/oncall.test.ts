@@ -16,8 +16,9 @@ function breakAndFix(inc: Incident) {
   let state = { world, shells: shellsFor(inc.start) };
   const broken = goalsMet(inc.goals, goalCtx(state, [])).every(Boolean);
   if (inc.fixMap?.length) state = { ...state, world: applyMapActions(state.world, inc.fixMap) };
-  const { state: fixed, log } = execScript(state, 0, inc.fix, VARS);
-  return { broken, fixed: goalsMet(inc.goals, goalCtx(fixed, log)).every(Boolean), log };
+  const ran = execScript(state, 0, inc.fix, VARS);
+  const fixed = inc.fixMapAfter?.length ? execScript({ ...ran.state, world: applyMapActions(ran.state.world, inc.fixMapAfter) }, 0, ["sleep 240"], VARS).state : ran.state;
+  return { broken, fixed: goalsMet(inc.goals, goalCtx(fixed, ran.log)).every(Boolean), log: ran.log };
 }
 
 describe("on-call", () => {

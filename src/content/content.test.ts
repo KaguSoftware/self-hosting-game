@@ -17,11 +17,19 @@ import { world5 } from "./worlds/w5";
 import { world6 } from "./worlds/w6";
 import { world7 } from "./worlds/w7";
 import { world8 } from "./worlds/w8";
+import { world9 } from "./worlds/w9";
 
-const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5, world6, world7, world8];
+const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5, world6, world7, world8, world9];
 import type { Step } from "./schema";
+import type { MapAction } from "@/sim/map";
+import type { Shell, World } from "@/sim/types";
 
 const VARS = { deployPassword: "test-pass-1" };
+
+/** Dashboard steps after the commands, then a few minutes for pipelines to run. */
+function afterFix(state: { world: World; shells: Shell[] }, actions: MapAction[]) {
+  return execScript({ ...state, world: applyMapActions(state.world, actions) }, 0, ["sleep 240"], VARS).state;
+}
 
 function words(s: string | undefined): number {
   return s ? s.split(/\s+/).filter(Boolean).length : 0;
@@ -164,7 +172,9 @@ describe("incidents", () => {
       if (inc.console) state = { ...state, shells: newWindow(state.shells, CONSOLE_FRAME) };
       // Dashboard changes first (DNS, firewall), then the commands.
       if (inc.fixMap) state = { ...state, world: applyMapActions(state.world, inc.fixMap) };
-      const { state: fixed, log } = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
+      const ran = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
+      const fixed = inc.fixMapAfter ? afterFix(ran.state, inc.fixMapAfter) : ran.state;
+      const log = ran.log;
       expect(goalsMet(inc.goals, goalCtx(fixed, log)).every(Boolean), log.map((e) => e.out).join("\n")).toBe(true);
       if (inc.url) expect(traceHttp(fixed.world, inc.url).ok).toBe(true);
     });

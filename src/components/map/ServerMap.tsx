@@ -84,7 +84,7 @@ interface Layout {
 type Slot = { id: string; col: "L" | "R" | "M" } | null;
 
 function extraIds(nodes: MapNode[]): string[] {
-  const fixed = new Set(["client", "laptop", "dns", "pfw", "vps", "ufw", "sshd", "caddy", "app", "db"]);
+  const fixed = new Set(["client", "laptop", "dns", "pfw", "gitlab", "vps", "ufw", "sshd", "caddy", "app", "db"]);
   return nodes.filter((n) => !fixed.has(n.id)).map((n) => n.id);
 }
 
@@ -118,7 +118,8 @@ function verticalLayout(nodes: MapNode[], W: number, rented: boolean, extraH: (i
     y += h + rowGap;
   };
   placeRow([{ id: "client", col: "L" }, { id: "laptop", col: "R" }], false);
-  placeRow([{ id: "dns", col: "L" }], false);
+  // GitLab lives on the internet, outside your server.
+  placeRow([{ id: "dns", col: "L" }, { id: "gitlab", col: "R" }], false);
   placeRow([{ id: "pfw", col: "M" }], false);
   const boxTop = y;
   y += boxPad + boxLabel;
@@ -173,6 +174,7 @@ function horizontalLayout(nodes: MapNode[], W: number, rented: boolean, extraH: 
     ],
     [
       [0, "laptop"],
+      [1, "gitlab"],
       [4, "sshd"],
     ],
   ];
@@ -391,6 +393,7 @@ export default function ServerMap(props: ServerMapProps) {
                       key={x.label}
                       type="button"
                       onClick={() => onToggle?.(x.node, x.label)}
+                      title={x.label}
                       className={`mt-1.5 flex h-6 w-full items-center justify-between gap-1 rounded-md border px-2 text-[11.5px] transition ${
                         x.on ? "border-teal/60 bg-teal/10 text-teal" : "border-red/60 bg-red/10 text-red"
                       }`}

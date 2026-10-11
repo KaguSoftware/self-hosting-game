@@ -76,4 +76,14 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "cron", re: /\bcron\b/i },
   { term: "log rotation", re: /\blog rotation\b/i },
   { term: "uptime monitor", re: /\buptime monitors?\b/i },
+  // World 9 ("job" is not here: World 0 already uses it as an everyday word)
+  { term: "merge request", re: /\bmerge requests?\b/i },
+  { term: "pipeline", re: /\bpipelines?\b/i },
+  { term: "runner", re: /\brunners?\b/i },
+  { term: "CI/CD variable", re: /\bCI\/CD variables?\b/i },
+  { term: "registry", re: /\bregistry\b/i },
+  { term: "stage", re: /\bstages?\b/i },
+  { term: "dind", re: /\bdind\b/i },
+  { term: "SHA", re: /\bSHAs?\b/ },
+  { term: "deploy token", re: /\bdeploy tokens?\b/i },
 ];

@@ -122,7 +122,8 @@ export default function TerminalTask({
             cb.onMistake();
           } else {
             idle.current += 1;
-            if (idle.current >= 4) {
+            // A step with many guided commands needs that many before "no progress" means stuck.
+            if (idle.current >= Math.max(4, (task.guide?.length ?? 0) + 2)) {
               idle.current = 0;
               setFailures((f) => f + 1);
             }

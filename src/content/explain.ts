@@ -124,6 +124,15 @@ SUB.caddy = {
   version: "print Caddy's version",
   fmt: "print the Caddyfile neatly formatted",
 };
+SUB.git = {
+  status: "show what changed since the last commit",
+  add: "pick a file to go into the next commit",
+  commit: "save the picked changes as one step in history",
+  push: "send your commits to GitLab (this starts a pipeline)",
+  log: "list past commits",
+  revert: "make a new commit that undoes an old one",
+  switch: "change to another branch",
+};
 SUB.rclone = {
   copy: "copy files from the first place to the second (it never deletes anything)",
   ls: "list the files in a bucket",
@@ -158,6 +167,9 @@ const FLAG_VALUE: Record<string, (v: string) => string> = {
   "psql -p": (v) => `the port: ${v}`,
   "psql -c": () => "the statement to run, in quotes",
   "pg_dump -U": (v) => `the database user: ${v}`,
+  "git -m": (v) => `the commit message: ${v}`,
+  "docker login -u": (v) => `the user: ${v}${v.startsWith("gitlab+deploy-token") ? " (the deploy token's name)" : ""}`,
+  "docker login -p": () => "the deploy token itself, used as the password",
   "truncate -s": (v) => (v === "0" ? "the new size: 0, so the file becomes empty" : `the new size: ${v}`),
   "pg_dump -n": (v) => `the schema: ${v}${v === "public" ? " (your own tables, not Supabase's extras)" : ""}`,
   "pg_dump -f": (v) => `the file to write: ${v}`,
@@ -184,6 +196,7 @@ const DOCKER_SUB: Record<string, string> = {
   exec: "run a command inside a container that is already running",
   build: "build an image from a Dockerfile",
   inspect: "print every detail about it, as JSON",
+  login: "log in to an image registry, so pulls of private images work",
   version: "print Docker's version",
   info: "print a summary of this Docker install",
   compose: "Docker Compose: start and manage every container described in compose.yaml, together",
@@ -269,6 +282,7 @@ function explainDocker(words: string[]): Part[] {
     else if (sc.cmd === "docker build") means = t === "." ? "the build context: this folder. Docker sends its files to the build" : pathMeaning(t);
     else if (/^docker compose /.test(sc.cmd)) means = `only this service: ${t}`;
     else if (/^docker (volume|network) /.test(sc.cmd)) means = `the ${sc.cmd.split(" ")[1]}: ${t}`;
+    else if (sc.cmd === "docker login") means = `the registry to log in to: ${t}${t === "registry.gitlab.com" ? " (GitLab's image storage)" : ""}`;
     else means = `the container: ${t}`;
     if (sc.cmd === "docker compose exec" || sc.cmd === "docker compose run") means = `the service to run it in: ${t}`;
     if (sc.cmd === "docker exec") means = `the container to run it in: ${t}`;
@@ -423,6 +437,8 @@ function argMeaning(cmd: string, sub: string | undefined, a: string, prev: strin
   if ((cmd === "usermod" || cmd === "id" || cmd === "passwd" || cmd === "deluser") && /^\w+$/.test(a)) return `the user: ${a}`;
   if (["dig", "nslookup", "host", "ping"].includes(cmd) && /^[\w.-]+$/.test(a)) return `the name to look up: ${a}`;
   if (cmd === "echo") return "the text to print";
+  if (cmd === "git" && sub === "add") return pathMeaning(a);
+  if (cmd === "git" && sub === "revert" && a === "HEAD") return "HEAD: the newest commit on this branch";
   if (cmd === "pg_dump" && /^\w+$/.test(a)) return `the database to copy: ${a}`;
   if (cmd === "sleep" && /^\d+[smh]?$/.test(a)) return `how long to wait: ${a}`;
   if (/^[~/.]/.test(a) || a.includes("/") || /\.\w+$/.test(a)) return pathMeaning(a);
@@ -432,6 +448,11 @@ function argMeaning(cmd: string, sub: string | undefined, a: string, prev: strin
 }
 
 function flagMeaning(cmd: string, flag: string): string {
+  if (flag.startsWith("--") && flag.includes("=")) {
+    const [f, v] = [flag.slice(0, flag.indexOf("=")), flag.slice(flag.indexOf("=") + 1)];
+    const m = flagMeaning(cmd, f);
+    return m ? `${m} (here: ${v})` : "";
+  }
   const exact = FLAGS.find((f) => f.cmd === cmd && f.flag === flag);
   if (exact) return exact.means;
   if (/^-[A-Za-z]{2,}$/.test(flag)) {

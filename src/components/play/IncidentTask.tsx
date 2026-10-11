@@ -113,6 +113,11 @@ export default function IncidentTask({
       await new Promise((r) => setTimeout(r, 700));
       usePlay.getState().run(raw.replace(/\{\{(\w+)\}\}/g, (_, k) => v[k] ?? ""));
     }
+    if (incident.fixMapAfter) {
+      await new Promise((r) => setTimeout(r, 700));
+      usePlay.getState().setWorld(applyMapActions(usePlay.getState().state.world, incident.fixMapAfter));
+      usePlay.getState().run("sleep 240");
+    }
     usePlay.getState().setBusy(false);
   }
 

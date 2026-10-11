@@ -72,6 +72,14 @@ export const FLAGS: FlagInfo[] = [
   { cmd: "wc", flag: "-l", means: "count lines" },
   { cmd: "tee", flag: "-a", means: "append: add to the end of the file instead of replacing it" },
   { cmd: "passwd", flag: "-l", means: "lock: switch password login off for that user" },
+  { cmd: "git", flag: "-m", means: "message: the note saved with this commit" },
+  { cmd: "git", flag: "--oneline", means: "one short line per commit" },
+  { cmd: "git", flag: "--abbrev", means: "how many characters of each commit's SHA to show" },
+  { cmd: "git", flag: "--no-edit", means: "use the suggested message without opening an editor" },
+  { cmd: "git", flag: "-n", means: "only the last N commits" },
+  { cmd: "docker login", flag: "-u", means: "user: who to log in as" },
+  { cmd: "docker login", flag: "-p", means: "password (here, the deploy token). Visible in your shell history, so prefer --password-stdin" },
+  { cmd: "ssh-keygen", flag: "-q", means: "quiet: print less" },
   { cmd: "crontab", flag: "-e", means: "edit: open your scheduled jobs in an editor" },
   { cmd: "crontab", flag: "-l", means: "list: print your scheduled jobs" },
   { cmd: "crontab", flag: "-r", means: "remove ALL your scheduled jobs (no undo)" },
@@ -140,6 +148,7 @@ const TAKES_VALUE: Record<string, string[]> = {
   "docker run": ["--name", "-e", "-v", "-p", "--network", "--restart", "-w", "-u", "--env-file"],
   "docker exec": ["-w", "-u", "-e"],
   "docker build": ["-t", "-f"],
+  "docker login": ["-u", "-p"],
   "docker logs": ["--tail", "-n"],
   "docker compose logs": ["--tail", "-n"],
   "docker compose exec": ["-w", "-u", "-e"],
@@ -200,6 +209,8 @@ export interface FlagNote {
 }
 
 function lookup(cmd: string, flag: string): { flag: string; means: string }[] | null {
+  // --abbrev=8: look up --abbrev
+  if (flag.startsWith("--") && flag.includes("=")) flag = flag.slice(0, flag.indexOf("="));
   const exact = FLAGS.find((f) => f.cmd === cmd && f.flag === flag);
   if (exact) return [{ flag, means: exact.means }];
   // -la = -l + -a ; -aG = -a + -G
@@ -231,6 +242,8 @@ export function flagsIn(line: string): FlagNote[] {
   while (queue.length) {
     let words = queue.shift()!;
     while (words[0] === "sudo" && !(words[1]?.startsWith("-"))) words = words.slice(1);
+    // APP_TAG=v1.0 docker compose up: the variable is not the command.
+    while (words[0] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
     if (!words[0]) continue;
     const sc = splitCommand(words);
     for (let i = 0; i < sc.rest.length; i++) {

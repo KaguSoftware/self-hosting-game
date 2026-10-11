@@ -3,6 +3,7 @@ import * as P from "@/sim/predicates";
 import { DOMAIN, VPS_IP, WRONG_IP } from "@/sim/constants";
 import { runDetached } from "@/sim/shell/run";
 import { advance } from "@/sim/tick";
+import { liveRevision, seedRegistry } from "@/sim/gitlab";
 import type { Frame } from "@/sim/types";
 
 /** deploy on web-1, in the shop's folder, as a fresh login (so the docker group counts). */
@@ -303,7 +304,6 @@ INCIDENTS.push(
   },
   {
     id: "app-127",
-    oncall: { layer: "app" },
     title: "502 after a rebuild",
     client: {
       name: "Sam, your teammate",
@@ -436,6 +436,137 @@ INCIDENTS.push({
   ],
   timeLimit: 360,
 });
+
+// ---------- World 9 ----------
+const LAPTOP_REPO: Frame = { host: "laptop", user: "you", cwd: "/home/you/code/crumb", via: "local" };
+const liveIsHead = (g: Parameters<Incident["goals"][number]["check"]>[0]) => !!g.world.gitlab && liveRevision(g.world) === g.world.gitlab.branches.main;
+/** A teammate's small fix, committed and pushed from the laptop's clone. */
+const pushFix = (w: Parameters<Incident["breakIt"]>[0], msg: string) =>
+  runDetached(w, LAPTOP_REPO, `echo "// ${msg}" >> lib/cart.ts && git add lib/cart.ts && git commit -m "${msg}" && git push`);
+const runnerSwitch = {
+  node: "gitlab",
+  label: "Runner online",
+  on: { type: "runner" as const, id: 1, online: true },
+  off: { type: "runner" as const, id: 1, online: false },
+};
+
+INCIDENTS.push(
+  {
+    id: "runner-pending",
+    oncall: { layer: "ci" },
+    title: "Stuck on pending",
+    client: {
+      name: "Riya, who runs the shop",
+      message: "Sam pushed the checkout fix an hour ago. GitLab just says pending. Is it live or not?",
+    },
+    after: "w9-08",
+    start: "laptop",
+    breakIt: (w) => {
+      const r = w.gitlab?.runners.find((x) => x.id === 1);
+      if (r) r.online = false;
+      pushFix(w, "Fix checkout rounding");
+      advance(w, w.clock + 120);
+    },
+    goals: [
+      { describe: "The latest pipeline on main passed", check: P.pipelineStatus("main", "success") },
+      { describe: "The live shop runs the fix", check: liveIsHead },
+    ],
+    hints: ["Open the pending job in the pipeline panel. It says why it is stuck.", "No runner is online. Switch crumb-runner back on, then give the pipeline a few minutes."],
+    fastestPath: ["Pipeline panel: test job pending, stuck: no active runners", "GitLab settings: crumb-runner is offline. Bring it back", "sleep 240   → test, build, deploy pass"],
+    fix: ["sleep 240"],
+    fixMap: [{ type: "runner", id: 1, online: true }],
+    controls: [runnerSwitch],
+    debrief: ["Pending means waiting for a runner, not running.", "No runner online, no pipeline. It is a machine like any other: watch it.", "The job's page always says why it is stuck."],
+    timeLimit: 300,
+  },
+  {
+    id: "pinned-tag",
+    oncall: { layer: "ci", conflicts: ["ci-var-protected", "crash-loop-env", "db-localhost", "app-127", "disk-full-logs"] },
+    title: "Green pipeline, old shop",
+    client: {
+      name: "Sam, your teammate",
+      message: "My fix passed every job, deploy is green, but the shop still shows the old cart. During last week's outage someone 'pinned' something on web-1?",
+    },
+    after: "w9-08",
+    start: "laptop",
+    breakIt: (w) => {
+      const g = w.gitlab;
+      const old = g && Object.values(g.commits).find((c) => c.message === "Add Dockerfile and compose.yaml")?.sha;
+      if (old) seedRegistry(w, old, ["v1.0"]);
+      const f = getFile(w.hosts.vps, "/srv/crumb/compose.yaml");
+      if (f) f.content = f.content.replace("web:${APP_TAG:-latest}", "web:v1.0");
+      runDetached(w, { host: "vps", user: "ci", cwd: "/srv/crumb", via: "ssh", remote: VPS_IP, loginGroups: ["ci", "docker"] }, "docker compose up -d app");
+      pushFix(w, "Fix cart totals");
+      advance(w, w.clock + 240);
+    },
+    goals: [{ describe: "The live shop runs the latest commit", check: liveIsHead }],
+    hints: [
+      "curl -I https://crumb.shop shows x-app-version. Compare it with git log --oneline --abbrev=8. Then read compose.yaml on web-1.",
+      "compose.yaml says web:v1.0, so APP_TAG is ignored. Put ${APP_TAG:-latest} back, then retry the deploy job.",
+    ],
+    fastestPath: [
+      "curl -I https://crumb.shop   → x-app-version is an old commit",
+      "grep image /srv/crumb/compose.yaml   → web:v1.0 (pinned)",
+      "sed -i 's/web:v1.0/web:${APP_TAG:-latest}/' compose.yaml",
+      "Pipeline panel: retry the deploy job",
+    ],
+    fix: ["ssh deploy@203.0.113.10", "cd /srv/crumb", "sed -i 's/web:v1.0/web:${APP_TAG:-latest}/' compose.yaml", "exit"],
+    fixMapAfter: [{ type: "retryJob", job: "deploy" }],
+    controls: [{ node: "gitlab", label: "Retry deploy", on: { type: "retryJob", job: "deploy" }, off: { type: "flag", name: "noop", value: false } }],
+    debrief: [
+      "A green deploy only proves the commands ran. Check what is live: x-app-version.",
+      "A hard-coded tag in compose.yaml silently wins over APP_TAG.",
+      "Pin during an outage if you must, then unpin.",
+    ],
+    timeLimit: 360,
+    url: "https://crumb.shop",
+  },
+  {
+    id: "ci-var-protected",
+    oncall: { layer: "ci", conflicts: ["pinned-tag", "crash-loop-env", "db-localhost", "db-port-public", "disk-full-logs"] },
+    title: "The deploy job fails",
+    client: {
+      name: "Sam, your teammate",
+      message: "I 'tidied up' the CI/CD variables in GitLab yesterday. Now every deploy job fails at the ssh line.",
+    },
+    after: "w9-08",
+    start: "laptop",
+    breakIt: (w) => {
+      const v = w.gitlab?.variables.find((x) => x.key === "SSH_KEY");
+      if (v) v.type = "env_var";
+      pushFix(w, "Tidy cart code");
+      advance(w, w.clock + 240);
+    },
+    goals: [
+      { describe: "The deploy job passed", check: P.jobStatus("deploy", "success") },
+      { describe: "The live shop runs the latest commit", check: liveIsHead },
+    ],
+    hints: [
+      "Read the deploy job's log in the pipeline panel. What does ssh say about the identity file?",
+      "SSH_KEY was changed to a plain variable. ssh -i needs a file. Set it back to File (and Protected), then retry the deploy job.",
+    ],
+    fastestPath: [
+      "Pipeline panel: deploy job log   → Identity file not accessible",
+      "GitLab settings: SSH_KEY is now a plain variable. Make it a File again",
+      "Retry the deploy job",
+    ],
+    fix: ["sleep 240"],
+    fixMap: [
+      { type: "ciVar", key: "SSH_KEY", value: "", varType: "file", protected: true, fromFile: { host: "laptop", path: "/home/you/.ssh/crumb_ci" } },
+      { type: "retryJob", job: "deploy" },
+    ],
+    controls: [
+      { node: "gitlab", label: "Key: File + Protected", on: { type: "ciVar", key: "SSH_KEY", value: "", varType: "file", protected: true, fromFile: { host: "laptop", path: "/home/you/.ssh/crumb_ci" } }, off: { type: "ciVar", key: "SSH_KEY", value: null } },
+      { node: "gitlab", label: "Retry deploy", on: { type: "retryJob", job: "deploy" }, off: { type: "flag", name: "noop", value: false } },
+    ],
+    debrief: [
+      "A File variable hands the job a path to a file. A plain one hands it the text.",
+      "ssh -i wants a file, so a plain variable fails with Identity file not accessible.",
+      "The job log tells you which line failed and why. Read it before changing anything.",
+    ],
+    timeLimit: 300,
+  },
+);
 
 export function incidentById(id: string): Incident | undefined {
   return INCIDENTS.find((i) => i.id === id);

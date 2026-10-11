@@ -24,7 +24,7 @@ const LOGGING = `    logging:
 `;
 
 /** The World 7 compose file, with a logging block on every service. */
-function composeWithLogging(size: string): string {
+export function composeWithLogging(size: string): string {
   return `services:
   caddy:
     image: caddy:2

@@ -19,6 +19,7 @@ import BudgetTask from "./BudgetTask";
 import { isGuess } from "@/content/schema";
 import IncidentTask from "./IncidentTask";
 import MissionTask from "./MissionTask";
+import PipelinePanel from "./PipelinePanel";
 import MapTask from "./MapTask";
 import { AllocateTask, ConfigTask, MatchTask, OrderTask, PredictTask, RapidTask, SpotTask } from "./QuizTasks";
 import TerminalTask from "./TerminalTask";
@@ -288,6 +289,11 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
               {mapOpen && <ServerMap world={play.preview ?? play.state.world} trace={play.trace} traceKey={play.traceKey} forceVertical />}
             </div>
           )}
+          {play.state.world.gitlab && (
+            <div className="lg:hidden">
+              <PipelinePanel world={play.state.world} />
+            </div>
+          )}
           {isGuess(step) && !done && (
             <div className="flex items-start gap-2.5 rounded-xl border border-line2 bg-panel2/60 px-4 py-3 text-[14px] leading-snug text-ink/85">
               <span className="mt-px font-mono text-[12px] font-semibold text-muted">?</span>
@@ -302,6 +308,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
           <aside className="hidden lg:block">
             <div className="sticky top-[72px] space-y-2">
               <ServerMap world={play.preview ?? play.state.world} trace={play.trace} traceKey={play.traceKey} forceVertical title={play.preview ? "What if... (preview)" : "Your servers, live"} />
+              <PipelinePanel world={play.state.world} />
               {pwKnown && (
                 <button type="button" onClick={() => setRevealPw(!revealPw)} className="text-[12px] text-faint hover:text-muted">
                   deploy&apos;s password: {revealPw ? play.state.world.hosts.vps.users.deploy?.password : "•••••• (tap to show)"}

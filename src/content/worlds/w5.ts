@@ -452,7 +452,7 @@ export const world5: WorldDef = {
         },
         {
           id: "w5-05-b",
-          mission: "Fill in the shop's Dockerfile. It builds in three stages and keeps only what is needed.",
+          mission: "Fill in the shop's Dockerfile. It builds in three parts and keeps only what is needed.",
           intel: {
             lines: ['output: "standalone" makes Next.js build a small server.js.', "HOSTNAME=0.0.0.0 lets other containers reach it.", "Only NEXT_PUBLIC_ values go in the build. Secrets come later."],
           },
