@@ -635,7 +635,14 @@ function cmdBuild(ctx: Ctx, args: string[]): number {
 
 // ---------- exec ----------
 
-function execInto(ctx: Ctx, c: Container, cmd: string[], workdir?: string): number {
+interface ExecFlags {
+  tty?: boolean;
+  interactive?: boolean;
+  user?: string;
+  env?: string[];
+}
+
+function execInto(ctx: Ctx, c: Container, cmd: string[], workdir?: string, f: ExecFlags = {}): number {
   if (c.status === "restarting") {
     ctx.err(`Error response from daemon: Container ${fullId(c.id)} is restarting, wait until the container is running`);
     return 1;
@@ -644,7 +651,30 @@ function execInto(ctx: Ctx, c: Container, cmd: string[], workdir?: string): numb
     ctx.err(`Error response from daemon: container ${fullId(c.id)} is not running`);
     return 1;
   }
-  return execIn({ w: ctx.w, host: ctx.host, c, argv: cmd, workdir, out: (s) => ctx.out(s), err: (s) => ctx.err(s), info: (s) => ctx.info(s) });
+  // A terminal needs a keyboard: not in cron or CI (detached), not when input comes from < or a pipe.
+  const keyboard = ctx.sh.id !== "detached" && ctx.stdin === undefined;
+  if (f.tty && f.interactive && !keyboard) {
+    ctx.err("the input device is not a TTY");
+    return 1;
+  }
+  const env = Object.fromEntries((f.env ?? []).map((kv) => [kv.split("=")[0], kv.split("=").slice(1).join("=")]));
+  return execIn({
+    w: ctx.w,
+    host: ctx.host,
+    c,
+    argv: cmd,
+    workdir,
+    out: (s) => ctx.out(s),
+    err: (s) => ctx.err(s),
+    info: (s) => ctx.info(s),
+    user: f.user,
+    env,
+    tty: f.tty,
+    interactive: f.interactive,
+    stdin: f.interactive ? ctx.stdin : undefined,
+    // Only a keyboard can answer a prompt (a psql session, a password).
+    prompt: keyboard ? (p) => ctx.prompt(p) : undefined,
+  });
 }
 
 function cmdExec(ctx: Ctx, args: string[]): number {
@@ -660,7 +690,12 @@ function cmdExec(ctx: Ctx, args: string[]): number {
     noSuch(ctx, p.rest[0]);
     return 1;
   }
-  return execInto(ctx, c, p.rest.slice(1), last(p, "w", "workdir"));
+  return execInto(ctx, c, p.rest.slice(1), last(p, "w", "workdir"), {
+    tty: has(p, "t", "tty"),
+    interactive: has(p, "i", "interactive"),
+    user: last(p, "u", "user"),
+    env: all(p, "e", "env"),
+  });
 }
 
 // ---------- inspect ----------
@@ -1320,7 +1355,8 @@ function compose(ctx: Ctx, args: string[]): number {
         ctx.err(`service "${svc}" is not running`);
         return 1;
       }
-      return execInto(ctx, c, cmd, last(p, "w", "workdir"));
+      // compose exec gives a terminal and stdin by default; -T turns the terminal off.
+      return execInto(ctx, c, cmd, last(p, "w", "workdir"), { tty: !has(p, "T", "no-TTY"), interactive: true, user: last(p, "u", "user"), env: all(p, "e", "env") });
     }
   }
   return 0;

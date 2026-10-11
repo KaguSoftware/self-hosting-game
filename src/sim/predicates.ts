@@ -6,6 +6,9 @@ import { runningSshd } from "./sshd";
 import type { Container, HopId, Host, HostId, Shell, World } from "./types";
 import { localImage } from "./docker/images";
 import { dockerInstalled as engineInstalled } from "./docker/runtime";
+import { clusterOf, dataVolume } from "./pg/cluster";
+import { looksLikeDump } from "./pg/dump";
+import type { PgCluster } from "./pg/types";
 
 export interface LogEntry {
   line: string;
@@ -311,3 +314,55 @@ export const imageBaked =
     const baked = localImage(vpsHost(g), ref)?.meta?.baked ?? {};
     return value === undefined ? key in baked : baked[key] === value;
   };
+
+// ---------- postgres ----------
+
+/** Every Postgres cluster on the VPS: the db container's volume first, then any other volume with data. */
+function pgClusters(g: GoalCtx): PgCluster[] {
+  const host = vpsHost(g);
+  const out: PgCluster[] = [];
+  const db = findDockerContainer(host, "db");
+  const first = db?.kind === "postgres" ? dataVolume(host, db) : undefined;
+  if (first?.pg) out.push(clusterOf(first.pg));
+  for (const v of Object.values(host.docker.volumes)) if (v.pg && v !== first) out.push(clusterOf(v.pg));
+  return out;
+}
+
+/** A database with this name exists in the server's data. */
+export const pgDatabase =
+  (name: string): Check =>
+  (g) =>
+    pgClusters(g).some((c) => !!c.databases[name]);
+
+/** A table ("orders" means public.orders) in `db` holds at least `min` rows. */
+export const pgTableRows =
+  (db: string, table: string, min: number): Check =>
+  (g) => {
+    const q = table.includes(".") ? table : `public.${table}`;
+    return pgClusters(g).some((c) => (c.databases[db]?.tables[q]?.rows ?? -1) >= min);
+  };
+
+export const pgRole =
+  (name: string): Check =>
+  (g) =>
+    pgClusters(g).some((c) => !!c.roles[name]);
+
+/** 5432 cannot be reached from the internet, and no container publishes Postgres on 0.0.0.0. */
+export const dbNotPublic: Check = (g) => {
+  if (internetReaches(5432)(g)) return false;
+  return Object.values(vpsHost(g).docker.containers).every(
+    (c) => !c.ports.some((p) => (p.hostIp === "0.0.0.0" || p.hostIp === "::") && (p.hostPort === 5432 || (c.kind === "postgres" && p.containerPort === 5432))),
+  );
+};
+
+/** An ssh -L tunnel listens on this laptop port, and the window holding it is still open. */
+export const tunnelOpen =
+  (port: number): Check =>
+  (g) =>
+    (g.world.tunnels ?? []).some((t) => t.laptopPort === port && (!t.shellId || !g.shells.length || g.shells.some((s) => s.id === t.shellId)));
+
+/** A database dump: custom format (starts with PGDMP) or plain SQL with CREATE TABLE. */
+export const dumpFile =
+  (host: HostId, path: string): Check =>
+  (g) =>
+    looksLikeDump(getFile(g.world.hosts[host], path)?.content);

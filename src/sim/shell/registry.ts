@@ -9,6 +9,7 @@ import { SYSTEMD_COMMANDS } from "./commands/systemd";
 import { TEXT_COMMANDS } from "./commands/text";
 import { UFW_COMMANDS } from "./commands/ufw";
 import { USER_COMMANDS } from "./commands/users";
+import { PG_COMMANDS } from "../pg/commands";
 import type { Command } from "./ctx";
 
 const GROUPS: [string, Command[]][] = [
@@ -23,6 +24,7 @@ const GROUPS: [string, Command[]][] = [
   ["Network", NET_COMMANDS],
   ["Scripts", SCRIPT_COMMANDS],
   ["Containers", DOCKER_COMMANDS],
+  ["Database", PG_COMMANDS],
 ];
 
 const help: Command = {
