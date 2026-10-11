@@ -75,6 +75,9 @@ const COMMANDS: Record<string, string> = {
   sh: "run a script file with the basic shell",
   bash: "run a script file with bash, the usual shell",
   sleep: "wait this long. Time moves on for everything",
+  truncate: "cut a file down to a size. -s 0 empties it, even while a program writes to it",
+  reboot: "restart the whole server",
+  find: "search for files by name, age or size",
   export: "set a variable that the commands you run next will see",
   docker: "run and manage containers",
   git: "version control: track changes to code and share them",
@@ -121,6 +124,12 @@ SUB.caddy = {
   version: "print Caddy's version",
   fmt: "print the Caddyfile neatly formatted",
 };
+SUB.rclone = {
+  copy: "copy files from the first place to the second (it never deletes anything)",
+  ls: "list the files in a bucket",
+  lsd: "list the buckets",
+  listremotes: "list the remotes in your rclone config",
+};
 SUB.ip = {
   a: "short for address: show each network card and its addresses",
   addr: "show each network card and its addresses",
@@ -148,6 +157,8 @@ const FLAG_VALUE: Record<string, (v: string) => string> = {
   "psql -h": (v) => `the machine: ${v}${v === "127.0.0.1" ? " (your end of the tunnel)" : ""}`,
   "psql -p": (v) => `the port: ${v}`,
   "psql -c": () => "the statement to run, in quotes",
+  "pg_dump -U": (v) => `the database user: ${v}`,
+  "truncate -s": (v) => (v === "0" ? "the new size: 0, so the file becomes empty" : `the new size: ${v}`),
   "pg_dump -n": (v) => `the schema: ${v}${v === "public" ? " (your own tables, not Supabase's extras)" : ""}`,
   "pg_dump -f": (v) => `the file to write: ${v}`,
   "pg_restore -h": (v) => `the machine: ${v}${v === "127.0.0.1" ? " (your end of the tunnel)" : ""}`,
@@ -302,6 +313,7 @@ const FOLDERS: [RegExp, string][] = [
   [/(^|\/)Dockerfile$/, "the recipe for the app's image"],
   [/\.sh$/, "a script: a file of commands to run in order"],
   [/\.dump$/, "a database dump: a whole database copied into one file"],
+  [/\.bak$/, "a backup copy of a file"],
 ];
 
 function pathMeaning(p: string): string {
@@ -342,6 +354,7 @@ const PLACEHOLDERS: Record<string, string> = {
 
 const PACKAGES: Record<string, string> = {
   ncdu: "ncdu, a tool that shows what fills your disk",
+  rclone: "rclone, a tool that copies files to cloud storage",
   htop: "htop, a live view of busy programs",
   "docker-ce": "Docker, from Docker's own repository",
   caddy: "the Caddy web server",
@@ -359,8 +372,16 @@ const SERVICES: Record<string, string> = {
 function argMeaning(cmd: string, sub: string | undefined, a: string, prev: string[]): string {
   if (PLACEHOLDERS[a]) return PLACEHOLDERS[a];
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) return `sets ${a.split("=")[0]} to "${a.slice(a.indexOf("=") + 1)}" just for this command`;
-  if (/^\$\(/.test(a)) return "runs the command inside $( ) first and puts its output here";
+  if (/^\$\(/.test(a)) {
+    const inner = a.slice(2, -1).trim();
+    return `runs ${inner.split(/\s+/).slice(0, 2).join(" ")} first and puts what it prints right here${/LogPath/.test(inner) ? ": the path of the container's log file" : /date/.test(inner) ? ": today's date" : ""}`;
+  }
   if (/^\$\{?\w+/.test(a)) return `the value of the variable ${a.replace(/[${}]/g, "")}`;
+  if (cmd === "rclone" && /^[\w-]+:/.test(a)) {
+    const [remote, ...rest] = a.split(":");
+    return `the remote called ${remote} (set up in rclone.conf)${rest.join(":") ? `, bucket ${rest.join(":")}` : ""}`;
+  }
+  if (cmd === "truncate" && a.startsWith("/var/lib/docker/")) return "a container's log file on the server";
   if (/^["']?postgres(ql)?:\/\//.test(a)) return "a connection string: user, password, machine, port and database in one line (in quotes so the shell leaves it alone)";
   if (cmd === "sed" && /^(['"])s(.)/.test(a)) {
     const d = a[2];
@@ -402,6 +423,7 @@ function argMeaning(cmd: string, sub: string | undefined, a: string, prev: strin
   if ((cmd === "usermod" || cmd === "id" || cmd === "passwd" || cmd === "deluser") && /^\w+$/.test(a)) return `the user: ${a}`;
   if (["dig", "nslookup", "host", "ping"].includes(cmd) && /^[\w.-]+$/.test(a)) return `the name to look up: ${a}`;
   if (cmd === "echo") return "the text to print";
+  if (cmd === "pg_dump" && /^\w+$/.test(a)) return `the database to copy: ${a}`;
   if (cmd === "sleep" && /^\d+[smh]?$/.test(a)) return `how long to wait: ${a}`;
   if (/^[~/.]/.test(a) || a.includes("/") || /\.\w+$/.test(a)) return pathMeaning(a);
   if (["ls", "cd", "cat", "rm", "mkdir", "touch", "nano", "less", "head", "tail", "cp", "mv", "sed", "grep", "sh", "bash"].includes(cmd) && /^[\w.-]+$/.test(a)) return pathMeaning(a);
@@ -426,7 +448,7 @@ function flagMeaning(cmd: string, flag: string): string {
 function words(line: string): string[] {
   const out: string[] = [];
   // a|b|c with no spaces is cheat sheet notation for "one of these", not a pipe.
-  const re = /\s*("[^"]*"|'[^']*'|\w+(?:\|\w+)+(?=\s|$)|&&|\|\||>>|[|;<>]|[^\s|;<>]+)/g;
+  const re = /\s*(\$\([^)]*\)|"[^"]*"|'[^']*'|\w+(?:\|\w+)+(?=\s|$)|&&|\|\||>>|[|;<>]|[^\s|;<>]+)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(line))) if (m[1]) out.push(m[1]);
   return out;
@@ -481,7 +503,9 @@ function explainSimple(toks: string[]): Part[] {
   {
     const cmd = toks[i];
     if (!cmd) return parts;
-    parts.push({ text: cmd, means: COMMANDS[cmd] ?? (PLACEHOLDERS[cmd] ? PLACEHOLDERS[cmd] : "") });
+    const script = /^\.?\.?\//.test(cmd) ? `run the script ${cmd}. ./ means "in this folder", and it needs the x (run) permission` : "";
+    parts.push({ text: cmd, means: COMMANDS[cmd] ?? script ?? "" });
+    if (!COMMANDS[cmd] && !script && PLACEHOLDERS[cmd]) parts[parts.length - 1].means = PLACEHOLDERS[cmd];
     i++;
     let sub: string | undefined;
     const alts = toks[i]?.includes("|") ? toks[i].split("|") : null;

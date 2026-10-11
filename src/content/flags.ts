@@ -72,12 +72,23 @@ export const FLAGS: FlagInfo[] = [
   { cmd: "wc", flag: "-l", means: "count lines" },
   { cmd: "tee", flag: "-a", means: "append: add to the end of the file instead of replacing it" },
   { cmd: "passwd", flag: "-l", means: "lock: switch password login off for that user" },
+  { cmd: "crontab", flag: "-e", means: "edit: open your scheduled jobs in an editor" },
+  { cmd: "crontab", flag: "-l", means: "list: print your scheduled jobs" },
+  { cmd: "crontab", flag: "-r", means: "remove ALL your scheduled jobs (no undo)" },
+  { cmd: "crontab", flag: "-", means: "read the new list of jobs from what is piped in" },
+  { cmd: "du", flag: "-s", means: "summary: one total per folder, not every file inside" },
+  { cmd: "du", flag: "-h", means: "human-friendly sizes (K, M, G)" },
+  { cmd: "truncate", flag: "-s", means: "size: cut the file to this size (0 empties it)" },
+  { cmd: "docker compose up", flag: "--no-deps", means: "only the named service, without touching the services it depends on" },
+  { cmd: "docker inspect", flag: "--format", means: "print just one field instead of the whole JSON" },
+  { cmd: "rclone", flag: "-P", means: "progress: show how the copy is going" },
   { cmd: "psql", flag: "-U", means: "user: which database user to log in as" },
   { cmd: "psql", flag: "-d", means: "database: which database to open" },
   { cmd: "psql", flag: "-c", means: "command: run this one statement, then quit" },
   { cmd: "psql", flag: "-h", means: "host: which machine to connect to" },
   { cmd: "psql", flag: "-p", means: "port: which port Postgres listens on there" },
   { cmd: "pg_dump", flag: "-Fc", means: "format custom: one compact file that pg_restore reads" },
+  { cmd: "pg_dump", flag: "-U", means: "user: which database user to log in as" },
   { cmd: "pg_dump", flag: "-n", means: "only this schema (public holds your own tables)" },
   { cmd: "pg_dump", flag: "-f", means: "the file to write the dump into" },
   { cmd: "pg_restore", flag: "--no-owner", means: "do not try to give tables to their old owners (those roles do not exist here)" },
@@ -204,7 +215,10 @@ function lookup(cmd: string, flag: string): { flag: string; means: string }[] | 
 
 /** Split a command line into simple commands: "a && b | c" -> ["a", "b", "c"]. */
 function segments(line: string): string[][] {
+  // $( ... ) is a command of its own: its flags belong to it, not to the outer command.
   return line
+    .replace(/\$\(/g, " ; ")
+    .replace(/\)(?=\s|$)/g, " ; ")
     .split(/&&|\|\||\||;/)
     .map((s) => s.trim().split(/\s+/).filter(Boolean))
     .filter((t) => t.length);

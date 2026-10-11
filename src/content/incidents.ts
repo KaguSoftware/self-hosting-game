@@ -1,4 +1,4 @@
-import { getDir, getFile } from "@/sim/fs";
+import { getDir, getFile, put } from "@/sim/fs";
 import * as P from "@/sim/predicates";
 import { DOMAIN, VPS_IP, WRONG_IP } from "@/sim/constants";
 import { runDetached } from "@/sim/shell/run";
@@ -386,6 +386,55 @@ INCIDENTS.push({
     "Tools that need the database can use an SSH tunnel instead.",
   ],
   timeLimit: 300,
+});
+
+// ---------- World 8 ----------
+INCIDENTS.push({
+  id: "disk-full-logs",
+  oncall: { layer: "host", conflicts: ["db-port-public"] },
+  title: "The disk is full",
+  client: {
+    name: "Sam, your teammate",
+    message: "Orders fail and the database keeps restarting! A month ago I removed the 'noisy logging lines' from compose.yaml. I kept the old file as compose.yaml.bak, if that matters.",
+  },
+  after: "w8-08",
+  start: "vps-deploy",
+  breakIt: (w) => {
+    const f = getFile(w.hosts.vps, "/srv/crumb/compose.yaml");
+    if (f) {
+      put(w.hosts.vps, "/srv/crumb/compose.yaml.bak", { ...f });
+      f.content = f.content.replace(/(\n  app:\n(?:    .*\n)*?)    logging:\n      driver: json-file\n      options:\n        max-size: 10m\n        max-file: "3"\n/, "$1");
+    }
+    runDetached(w, DEPLOY_SHOP, "docker compose up -d");
+    const app = Object.values(w.hosts.vps.docker.containers).find((c) => c.service === "app" && c.status === "running");
+    if (app) app.logBytes = 40 * 1024 ** 3;
+    advance(w, w.clock + 30);
+  },
+  goals: [
+    { describe: "The disk has room again", check: P.diskNotFull },
+    { describe: "The database is healthy", check: P.containerHealthy("db") },
+    { describe: "The app's logs are capped again", check: (g) => !!Object.values(g.world.hosts.vps.docker.containers).find((c) => c.service === "app" && c.status === "running")?.logging?.options?.["max-size"] },
+    { describe: "The app reaches the database", check: P.appReachesDb("app") },
+  ],
+  hints: [
+    "df -h shows the disk at 100%. sudo du -sh /var/lib/docker/containers/* shows which container's log is huge.",
+    "Free space first: sudo truncate -s 0 $(docker inspect --format '{{.LogPath}}' crumb-app-1). Then cp compose.yaml.bak compose.yaml, give the database half a minute to come back (sleep 30), and docker compose up -d.",
+  ],
+  fastestPath: [
+    "df -h   → / is 100% full",
+    "sudo du -sh /var/lib/docker/containers/*   → one container log is 40G",
+    "sudo truncate -s 0 $(docker inspect --format '{{.LogPath}}' crumb-app-1)   → 40G freed",
+    "cp compose.yaml.bak compose.yaml   → the logging limits are back",
+    "sleep 30   → the database restarts now that there is room",
+    "docker compose up -d   → app recreated with its log limits",
+  ],
+  fix: ["cd /srv/crumb", "sudo truncate -s 0 $(docker inspect --format '{{.LogPath}}' crumb-app-1)", "{{deployPassword}}", "cp compose.yaml.bak compose.yaml", "sleep 30", "docker compose up -d"],
+  debrief: [
+    "Container logs live on the server's disk, and by default they never stop growing.",
+    "A full disk usually breaks the database first. Free space before restarting anything.",
+    "Cap logs on every service, and let an uptime monitor tell you before customers do.",
+  ],
+  timeLimit: 360,
 });
 
 export function incidentById(id: string): Incident | undefined {

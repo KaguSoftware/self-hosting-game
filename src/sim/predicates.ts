@@ -1,5 +1,6 @@
 // Goal predicates. Levels check the resulting STATE, never exact commands.
 import { getDir, getFile, isSudoer, userGroups } from "./fs";
+import { diskFull } from "./docker/logs";
 import { appToDb, providerAllows, resolveName, traceHttp, ufwAllows as ufwAllowsPort } from "./net";
 import { sshCheck } from "./sshAuth";
 import { runningSshd } from "./sshd";
@@ -317,6 +318,11 @@ export const imageBaked =
     const baked = localImage(vpsHost(g), ref)?.meta?.baked ?? {};
     return value === undefined ? key in baked : baked[key] === value;
   };
+
+// ---------- disk ----------
+
+/** The VPS disk is not full. */
+export const diskNotFull: Check = (g) => !diskFull(g.world.hosts.vps);
 
 // ---------- caddy and https ----------
 

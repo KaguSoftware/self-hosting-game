@@ -70,4 +70,10 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "migration", re: /\bmigrations?\b/i },
   { term: "SSH tunnel", re: /\btunnels?\b/i },
   { term: "pg_dump", re: /\bpg_dump\b/ },
+  // World 8
+  { term: "attack surface", re: /\battack surface\b/i },
+  { term: "3-2-1", re: /\b3-2-1\b/ },
+  { term: "cron", re: /\bcron\b/i },
+  { term: "log rotation", re: /\blog rotation\b/i },
+  { term: "uptime monitor", re: /\buptime monitors?\b/i },
 ];

@@ -35,7 +35,9 @@ export function writeConfig(w: World, host: "laptop" | "vps", path: string, cont
     if (existing) existing.content = content;
     else {
       if (!getDir(h, dirname(path))) put(h, dirname(path), { type: "dir", children: {}, mode: 0o755, owner: "root", group: "root" });
-      put(h, path, file(content, 0o644));
+      // A new file belongs to whoever owns the folder (deploy's files in /srv/crumb or /home/deploy).
+      const parent = getDir(h, dirname(path))!;
+      put(h, path, file(content, 0o644, parent.owner, parent.group));
     }
     void basename;
   });
