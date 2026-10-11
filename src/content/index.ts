@@ -14,8 +14,9 @@ import { world7 } from "./worlds/w7";
 import { world8 } from "./worlds/w8";
 import { world9 } from "./worlds/w9";
 import { world10 } from "./worlds/w10";
+import { world11 } from "./worlds/w11";
 
-const AUTHORED: WorldDef[] = [worldStart, world0, world1, world2, world3, world4, world5, world6, world7, world8, world9, world10];
+const AUTHORED: WorldDef[] = [worldStart, world0, world1, world2, world3, world4, world5, world6, world7, world8, world9, world10, world11];
 
 function mixQuiz(q: QuizItem): QuizItem {
   return { ...q, ...mixOptions(q.id, q.options, q.answer) };
@@ -38,7 +39,6 @@ export const WORLDS: WorldDef[] = AUTHORED.map((w) => ({ ...w, levels: w.levels.
 
 /** Worlds still being built. Shown locked on the path. */
 export const UPCOMING: { id: number; title: string; tagline: string }[] = [
-  { id: 11, title: "Debugging", tagline: "Find the hop" },
   { id: 12, title: "Final mission", tagline: "Zero to deployed" },
 ];
 
