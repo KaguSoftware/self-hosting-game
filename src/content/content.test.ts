@@ -135,6 +135,12 @@ describe("every level goal is reachable and not pre-met", () => {
             const filled = t.start.replace(/\{\{(\w+)\}\}/g, (_, k) => t.blanks![k].options[t.blanks![k].answer]);
             for (const c of t.checks) expect(c.test(filled), `${step.id} blanks: ${c.describe}`).toBe(true);
           }
+        } else if (t.kind === "mission") {
+          expect(goalsMet(t.goals, goalCtx(state, [])).some(Boolean), `${step.id}: no goal should be met at the start`).toBe(false);
+          const after = applyStep(state, step, VARS);
+          const met = goalsMet(t.goals, goalCtx(after, []));
+          const missing = t.goals.filter((_, i) => !met[i]).map((g) => `${g.area}: ${g.describe}`);
+          expect(missing, `${step.id}: the solution leaves these unmet`).toEqual([]);
         } else if (t.kind === "map" && t.mode === "toggle") {
           expect(goalsMet(t.goals, goalCtx(state, [])).every(Boolean), `${step.id} pre-met`).toBe(false);
           const w = applyMapActions(state.world, t.showMe);

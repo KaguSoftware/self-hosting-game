@@ -64,6 +64,21 @@ export function applyStep(state: PlayState, step: Step, vars: Vars): PlayState {
     case "budget":
       if (t.apply) return { ...state, world: applyMapActions(state.world, t.apply) };
       return state;
+    case "mission": {
+      let s = state;
+      for (const mv of t.solution) {
+        if ("run" in mv) {
+          const i = mv.shell ?? 0;
+          const shells = s.shells.slice();
+          while (shells.length <= i) shells.push(createShell(`w${shells.length + 1}`, { host: "laptop", user: "you", cwd: "/home/you", via: "local" }));
+          const r = runScript(s.world, shells[i], mv.run, defaultVars(vars));
+          shells[i] = r.shell;
+          s = { world: r.world, shells };
+        } else if ("actions" in mv) s = { ...s, world: applyMapActions(s.world, mv.actions) };
+        else s = { ...s, world: writeConfig(s.world, mv.config.host, mv.config.path, mv.config.content) };
+      }
+      return s;
+    }
     default:
       return state;
   }

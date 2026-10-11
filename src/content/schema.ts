@@ -122,7 +122,30 @@ export type Task =
       /** Applied to the world (kept) when solved. */
       apply?: MapAction[];
     }
-  | { kind: "incident"; incidentId: string };
+  | { kind: "incident"; incidentId: string }
+  | {
+      kind: "mission";
+      /** The brief: what "done" means, in plain words. */
+      brief: string[];
+      /** State checks, grouped by area. Core areas must all pass to finish; the rest earn stars. */
+      goals: MissionGoal[];
+      /** Provider dashboard switches (DNS, firewall, GitLab settings). */
+      controls?: MapControl[];
+      /** A full solution, in order, so a test can prove the mission can be done. Never shown. */
+      solution: MissionMove[];
+      console?: boolean;
+    };
+
+export interface MissionGoal extends Goal {
+  area: string;
+  /** Must pass to finish the mission. */
+  core?: boolean;
+}
+
+export type MissionMove =
+  | { run: string[]; shell?: number }
+  | { actions: MapAction[] }
+  | { config: { host: HostId; path: string; content: string } };
 
 export type TaskKind = Task["kind"];
 

@@ -18,6 +18,7 @@ import { Btn, KeyHint, MissionCard, plain, useEnterKey, useHotkey, type TaskCall
 import BudgetTask from "./BudgetTask";
 import { isGuess } from "@/content/schema";
 import IncidentTask from "./IncidentTask";
+import MissionTask from "./MissionTask";
 import MapTask from "./MapTask";
 import { AllocateTask, ConfigTask, MatchTask, OrderTask, PredictTask, RapidTask, SpotTask } from "./QuizTasks";
 import TerminalTask from "./TerminalTask";
@@ -197,6 +198,8 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         return <AllocateTask key={key} step={step} task={t} cb={cb} done={done} />;
       case "incident":
         return incident ? <IncidentTask key={key} incident={incident} cb={cb} done={done} /> : null;
+      case "mission":
+        return <MissionTask key={key} step={step} task={t} cb={cb} done={done} />;
     }
   })();
 
