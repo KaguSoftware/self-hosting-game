@@ -8,6 +8,8 @@ import type { WorldDef } from "@/content/schema";
 import TopBar from "@/components/TopBar";
 import { useProgress } from "@/store/progress";
 import { sfx } from "@/lib/sfx";
+import { useRouter } from "next/navigation";
+import { KeyHint, KeyLayer, plain, useEnterKey, useEscapeKey, useHotkey, useRestoreFocus } from "@/components/play/common";
 
 export default function Home() {
   const completed = useProgress((s) => s.completed);
@@ -38,6 +40,17 @@ export default function Home() {
     currentRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
   }
 
+  // Keyboard: Enter plays your current level, J scrolls to it, Esc closes a cheat sheet.
+  const router = useRouter();
+  const canPlay = hydrated && firstOpen >= 0 && unlocked(firstOpen) && !sheet;
+  useEnterKey(() => {
+    sfx.tap();
+    router.push(`/play/${LEVELS[firstOpen].id}`);
+  }, canPlay);
+  useHotkey((e) => plain(e) && e.key.toLowerCase() === "j", jumpToCurrent, hydrated && firstOpen >= 0 && !sheet);
+  useEscapeKey(() => setSheet(null), !!sheet, { layer: true });
+  useRestoreFocus(!!sheet);
+
   return (
     <>
       <TopBar />
@@ -55,6 +68,7 @@ export default function Home() {
               className="mt-4 inline-block rounded-lg bg-ink px-5 py-2.5 text-[14px] font-semibold text-bg hover:bg-white"
             >
               Start the first mission
+              <KeyHint>↵</KeyHint>
             </Link>
           </motion.section>
         )}
@@ -132,11 +146,11 @@ export default function Home() {
                     >
                       {isCurrent && (
                         <motion.div animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 1.6 }} className="mb-1 rounded-md bg-amber px-2 py-0.5 font-mono text-[11px] font-bold text-bg">
-                          {doneCount === 0 ? "START" : "NEXT"}
+                          {doneCount === 0 ? "START" : "NEXT"} ↵
                         </motion.div>
                       )}
                       {isOpen ? (
-                        <Link href={`/play/${l.id}`} onClick={() => sfx.tap()} aria-label={l.title}>
+                        <Link href={`/play/${l.id}`} onClick={() => sfx.tap()} aria-label={isCurrent ? `${l.title} (your next level, press Enter)` : l.title} className="block rounded-full">
                           {node}
                         </Link>
                       ) : (
@@ -179,14 +193,16 @@ export default function Home() {
           >
             <span aria-hidden>{where === "above" ? "↑" : "↓"}</span>
             Jump to your level
+            <KeyHint>J</KeyHint>
           </motion.button>
         )}
       </AnimatePresence>
 
+      {sheet && <KeyLayer />}
       <AnimatePresence>
         {sheet && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4" onClick={() => setSheet(null)}>
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line2 bg-panel p-5 scroll-thin">
+            <motion.div data-kb-panel role="dialog" aria-modal="true" aria-label={`Cheat sheet: ${sheet.title}`} initial={{ scale: 0.9 }} animate={{ scale: 1 }} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line2 bg-panel p-5 scroll-thin">
               <div className="flex items-center">
                 <div className="font-display text-xl text-ink">Cheat sheet · {sheet.title}</div>
                 <button type="button" onClick={() => setSheet(null)} className="ml-auto font-mono text-muted hover:text-amber">

@@ -6,6 +6,7 @@ import { FLAGS } from "@/content/flags";
 import { useUi } from "@/store/ui";
 import { startCloudSync } from "@/store/cloud";
 import { hydrateProgress } from "@/store/progress";
+import { KeyLayer, plain, useEscapeKey, useHotkey, useRestoreFocus } from "@/components/play/common";
 
 function Confetti() {
   const n = useUi((s) => s.confetti);
@@ -99,17 +100,28 @@ function Dictionary() {
       a.term.localeCompare(b.term),
     );
   }, [q]);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === "Escape" && closeDict();
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [closeDict]);
+  useEscapeKey(closeDict, dictOpen, { layer: true });
+  // Ctrl+\ (Cmd+\ on a Mac) opens the dictionary from anywhere, even mid-command in the
+  // terminal, and closes it again. Focus goes back to where it was.
+  useHotkey(
+    (e) => (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "\\" || e.code === "Backslash"),
+    () => (useUi.getState().dictOpen ? closeDict() : useUi.getState().openDict()),
+    true,
+    { inInput: "always", layer: true },
+  );
+  useRestoreFocus(dictOpen);
   return (
+    <>
+    {dictOpen && <KeyLayer />}
     <AnimatePresence>
       {dictOpen && (
         <>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDict} className="fixed inset-0 z-[60] bg-bg/60" />
           <motion.aside
+            data-kb-panel
+            role="dialog"
+            aria-modal="true"
+            aria-label="Dictionary"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -190,6 +202,134 @@ function Dictionary() {
         </>
       )}
     </AnimatePresence>
+    </>
+  );
+}
+
+const SHORTCUTS: { title: string; rows: [string[], string][] }[] = [
+  {
+    title: "Everywhere",
+    rows: [
+      [["?"], "Open or close this list"],
+      [["Ctrl \\"], "Open or close the dictionary, even while typing in the terminal"],
+      [["/"], "Open the dictionary (when you are not typing)"],
+      [["Esc"], "Close a panel. In the terminal: step out of it so letter keys work"],
+      [["Tab", "Shift Tab"], "Move between buttons"],
+      [["Enter"], "Press the main button: Continue, Check, Next. On the path: play your next level"],
+      [["J"], "On the path: scroll to your next level"],
+      [["Ctrl Enter"], "The same, even while you are typing"],
+    ],
+  },
+  {
+    title: "Answering",
+    rows: [
+      [["1", "2", "3"], "Pick an answer, a line, a piece, a plan or a switch"],
+      [["A", "B", "C"], "Pick a bucket, or a box on the server map"],
+      [["↑", "↓"], "Move the picked line up or down"],
+      [["H"], "Get a hint (Ctrl H in the terminal)"],
+      [["S"], "Show me, after both hints (Ctrl S in the terminal)"],
+      [["R"], "Quick review, on the level complete screen"],
+    ],
+  },
+  {
+    title: "Terminal",
+    rows: [
+      [["Enter"], "Run the command"],
+      [["Tab"], "Finish a name for you. On an empty line: fill in the command to type"],
+      [["Ctrl Space"], "Add the next suggested word to the line"],
+      [["↑", "↓"], "Bring back an earlier command"],
+      [["Alt 1", "Alt 2"], "Switch terminal window (Ctrl Shift 1 works too)"],
+      [["Alt N"], "Open a new window"],
+      [["Alt P"], "Open the provider console, when the button is there"],
+      [["T"], "Jump back into the terminal"],
+      [["Ctrl C"], "Stop what is running"],
+      [["Ctrl L"], "Clear the screen"],
+    ],
+  },
+];
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-line2 bg-bg px-1.5 font-mono text-[12px] font-semibold text-ink">
+      {children}
+    </kbd>
+  );
+}
+
+/** "?" opens a list of every keyboard shortcut. */
+function ShortcutsHelp() {
+  const { helpOpen, openHelp, closeHelp } = useUi();
+  const panel = useRef<HTMLDivElement>(null);
+  useHotkey((e) => e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey, openHelp, !helpOpen);
+  useHotkey((e) => e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey, closeHelp, helpOpen, { layer: true });
+  useHotkey((e) => e.key === "/" && plain(e), () => useUi.getState().openDict(), !helpOpen);
+  useEscapeKey(closeHelp, helpOpen, { layer: true });
+  useRestoreFocus(helpOpen);
+  useEffect(() => {
+    if (helpOpen) panel.current?.focus({ preventScroll: true });
+  }, [helpOpen]);
+  return (
+    <>
+      {helpOpen && <KeyLayer />}
+      <AnimatePresence>
+        {helpOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={closeHelp}
+            className="fixed inset-0 z-70 flex items-center justify-center bg-bg/80 p-4"
+          >
+            <motion.div
+              ref={panel}
+              data-kb-panel
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="keys-title"
+              tabIndex={-1}
+              initial={{ scale: 0.96, y: 8 }}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32 }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-line2 bg-panel p-5 outline-none scroll-thin"
+            >
+              <div className="flex items-center">
+                <h2 id="keys-title" className="text-[18px] font-semibold text-ink">
+                  Keyboard shortcuts
+                </h2>
+                <button type="button" onClick={closeHelp} className="ml-auto rounded px-2 font-mono text-muted hover:text-ink" aria-label="Close">
+                  ✕
+                </button>
+              </div>
+              <p className="mt-1 text-[13px] text-muted">You never need the mouse. Letter and number keys wait while you type in a box.</p>
+              <div className="mt-4 grid gap-5 md:grid-cols-2">
+                {SHORTCUTS.map((g) => (
+                  <section key={g.title} className={g.title === "Terminal" ? "md:col-span-2" : ""}>
+                    <h3 className="mb-2 font-mono text-[11px] uppercase tracking-widest text-muted">{g.title}</h3>
+                    <ul className={`space-y-1.5 ${g.title === "Terminal" ? "md:grid md:grid-cols-2 md:gap-x-5 md:space-y-0 md:gap-y-1.5" : ""}`}>
+                      {g.rows.map(([keys, what]) => (
+                        <li key={what} className="flex items-start gap-3 text-[13.5px] leading-snug">
+                          <span className="flex min-w-30 shrink-0 flex-wrap gap-1">
+                            {keys.map((k) => (
+                              <Kbd key={k}>{k}</Kbd>
+                            ))}
+                          </span>
+                          <span className="pt-0.5 text-ink/85">{what}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+              <p className="mt-4 text-[12px] text-faint">
+                On a Mac, Cmd works wherever Ctrl is listed. Press <Kbd>Esc</Kbd> or <Kbd>?</Kbd> to close.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -214,6 +354,7 @@ export default function GlobalLayer() {
       <Confetti />
       <Toasts />
       <Dictionary />
+      <ShortcutsHelp />
     </>
   );
 }

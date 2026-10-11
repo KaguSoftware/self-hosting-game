@@ -12,6 +12,10 @@ interface UiStore {
   dictQuery: string;
   openDict(q?: string): void;
   closeDict(): void;
+  /** The "Keyboard shortcuts" panel. */
+  helpOpen: boolean;
+  openHelp(): void;
+  closeHelp(): void;
   toasts: Toast[];
   toast(text: string, kind?: Toast["kind"]): void;
   confetti: number;
@@ -25,8 +29,11 @@ let tid = 1;
 export const useUi = create<UiStore>((set) => ({
   dictOpen: false,
   dictQuery: "",
-  openDict: (q = "") => set({ dictOpen: true, dictQuery: q }),
+  openDict: (q = "") => set({ dictOpen: true, dictQuery: q, helpOpen: false }),
   closeDict: () => set({ dictOpen: false }),
+  helpOpen: false,
+  openHelp: () => set({ helpOpen: true, dictOpen: false }),
+  closeHelp: () => set({ helpOpen: false }),
   toasts: [],
   toast: (text, kind = "info") => {
     const id = tid++;

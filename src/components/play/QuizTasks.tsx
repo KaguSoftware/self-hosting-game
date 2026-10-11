@@ -9,7 +9,25 @@ import { usePlay } from "@/store/play";
 import { sfx } from "@/lib/sfx";
 import { hashHex } from "@/sim/util";
 import { writeConfig } from "@/engine/replay";
-import { Btn, HintBar, OptionKey, useNumberKeys, type TaskCallbacks } from "./common";
+import {
+  Btn,
+  HintBar,
+  KeyHint,
+  LETTERS,
+  OptionKey,
+  useEnterKey,
+  useEscapeKey,
+  useHotkey,
+  useLetterKeys,
+  useNumberKeys,
+  useReorderKeys,
+  type TaskCallbacks,
+} from "./common";
+
+/** A small line under a task that says which keys work. */
+function KeysNote({ children }: { children: React.ReactNode }) {
+  return <p className="hidden text-[12px] text-faint sm:block">{children}</p>;
+}
 
 type Of<K extends Task["kind"]> = Extract<Task, { kind: K }>;
 
@@ -109,6 +127,8 @@ export function SpotTask({ step, task, cb, done }: { step: Step; task: Of<"spot"
     }
   }
 
+  useNumberKeys(task.lines.length, tap, !done);
+
   return (
     <div className="space-y-2">
       <p className="text-[14px] text-muted">
@@ -125,15 +145,21 @@ export function SpotTask({ step, task, cb, done }: { step: Step; task: Of<"spot"
               type="button"
               onClick={() => tap(i)}
               animate={isWrong ? { x: [0, -5, 5, -3, 3, 0] } : {}}
-              className={`block w-full whitespace-pre rounded px-2 py-1 text-left transition ${
+              className={`flex w-full items-start gap-2 rounded px-2 py-1 text-left transition ${
                 isFound ? "bg-teal/15 text-teal ring-1 ring-teal/60" : isWrong ? "bg-red/10 text-red/80 line-through" : "text-ink/90 hover:bg-amber/10"
               }`}
             >
-              {l || " "}
+              {task.lines.length > 1 && (
+                <span aria-hidden className="w-4 shrink-0 select-none text-right font-mono text-[11px] leading-[inherit] text-faint">
+                  {i < 9 ? i + 1 : ""}
+                </span>
+              )}
+              <span className="whitespace-pre">{l || " "}</span>
             </motion.button>
           );
         })}
       </div>
+      {!done && <KeysNote>Press the line&apos;s number to pick it{task.lines.length > 9 ? ", or Tab to it and press Enter" : ""}.</KeysNote>}
     </div>
   );
 }
@@ -169,6 +195,7 @@ export function OrderTask({ step, task, cb, done }: { step: Step; task: Of<"orde
   }
 
   function check(final = order, showMe = false) {
+    if (!showMe && checked?.every(Boolean)) return; // already solved, wait for the result
     const res = final.map((x, i) => x === task.items[i]);
     setChecked(res);
     if (res.every(Boolean)) {
@@ -190,6 +217,11 @@ export function OrderTask({ step, task, cb, done }: { step: Step; task: Of<"orde
     }
   }
 
+  // Keyboard: 1 to 9 picks a line, arrow Up and Down move it, Enter checks.
+  const [sel, setSel] = useState<number | null>(null);
+  useReorderKeys({ count: order.length, sel, setSel, move: (i, d) => move(i, d), enabled: !done });
+  useEnterKey(() => check(), !done);
+
   return (
     <div className="space-y-3">
       <p className="text-[14px] text-muted">{task.prompt}</p>
@@ -199,11 +231,12 @@ export function OrderTask({ step, task, cb, done }: { step: Step; task: Of<"orde
             key={item}
             value={item}
             dragListener={!done}
+            aria-current={sel === i ? "true" : undefined}
             className={`flex cursor-grab items-center gap-2 rounded-lg border bg-panel px-2 py-2 text-[13.5px] active:cursor-grabbing ${
-              checked ? (checked[i] ? "border-teal/70 text-teal" : "border-red/70 text-red") : "border-line2 text-ink"
-            }`}
+              checked ? (checked[i] ? "border-teal/70 text-teal" : "border-red/70 text-red") : sel === i ? "border-ink text-ink" : "border-line2 text-ink"
+            } ${sel === i ? "ring-1 ring-ink" : ""}`}
           >
-            <span className="w-5 text-center font-display text-[18px] text-amber/80">{i + 1}</span>
+            <span className={`w-5 text-center font-display text-[18px] ${sel === i ? "text-ink" : "text-amber/80"}`}>{i + 1}</span>
             <span className="flex-1">{item}</span>
             <span className="flex flex-col">
               <button type="button" aria-label="Move up" onClick={() => move(i, -1)} className="px-1.5 text-[11px] leading-3 text-muted hover:text-amber">
@@ -218,7 +251,13 @@ export function OrderTask({ step, task, cb, done }: { step: Step; task: Of<"orde
       </Reorder.Group>
       {!done && (
         <>
-          <Btn onClick={() => check()}>Check order</Btn>
+          <KeysNote>
+            {sel === null ? `Press 1 to ${Math.min(order.length, 9)} to pick a line.` : `Line ${sel + 1} picked: arrow Up and Down move it. Esc lets go.`} Enter checks the order.
+          </KeysNote>
+          <Btn onClick={() => check()}>
+            Check order
+            <KeyHint>↵</KeyHint>
+          </Btn>
           <HintBar
             hints={[`The first step is: ${task.items[0]}`, `The last step is: ${task.items[task.items.length - 1]}`]}
             failures={failures}
@@ -272,6 +311,19 @@ export function MatchTask({ step, task, cb, done }: { step: Step; task: Of<"matc
     }
   }
 
+  // Keyboard: the number picks an item (counting the ones still left), the letter drops it in a bucket.
+  const left = task.items.map((_, i) => i).filter((i) => placed[i] === undefined);
+  useNumberKeys(
+    left.length,
+    (n) => {
+      sfx.tap();
+      setSel(sel === left[n] ? null : left[n]);
+    },
+    !done,
+  );
+  useLetterKeys(task.buckets.length, drop, !done && sel !== null);
+  useEscapeKey(() => setSel(null), !done && sel !== null, { inInput: "never" });
+
   return (
     <div className="space-y-3">
       <p className="text-[14px] text-muted">{task.prompt}</p>
@@ -282,14 +334,16 @@ export function MatchTask({ step, task, cb, done }: { step: Step; task: Of<"matc
               layout
               key={it.text}
               type="button"
+              aria-pressed={sel === i}
               onClick={() => {
                 sfx.tap();
                 setSel(sel === i ? null : i);
               }}
-              className={`rounded-md border px-2.5 py-1.5 text-[13px] transition ${
+              className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[13px] transition ${
                 sel === i ? "border-teal bg-teal/15 text-teal shadow-[0_0_12px_rgba(255,255,255,0.3)]" : "border-line2 bg-panel2 hover:border-amber"
               }`}
             >
+              {left.indexOf(i) < 9 && <OptionKey n={left.indexOf(i) + 1} inline tone={sel === i ? "border-teal/60 text-teal" : undefined} />}
               {it.text}
             </motion.button>
           ),
@@ -306,7 +360,10 @@ export function MatchTask({ step, task, cb, done }: { step: Step; task: Of<"matc
               bad === bi ? "border-red bg-red/5" : sel !== null ? "border-amber/60 bg-amber/[0.04] hover:bg-amber/10" : "border-line2"
             }`}
           >
-            <div className="mb-1 font-mono text-[12px] font-semibold text-amber">{b}</div>
+            <div className="mb-1 flex items-center gap-2 font-mono text-[12px] font-semibold text-amber">
+              <OptionKey n={LETTERS[bi]} inline />
+              {b}
+            </div>
             <div className="flex flex-wrap gap-1">
               {task.items.map((it, i) =>
                 placed[i] === bi ? (
@@ -319,6 +376,13 @@ export function MatchTask({ step, task, cb, done }: { step: Step; task: Of<"matc
           </motion.button>
         ))}
       </div>
+      {!done && (
+        <KeysNote>
+          {sel === null
+            ? `Keys: press an item's number to pick it, then a bucket's letter (${LETTERS.slice(0, task.buckets.length).split("").join(", ")}) to drop it.`
+            : `Now press ${LETTERS.slice(0, task.buckets.length).split("").join(", ")} to drop it in a bucket. Esc lets go.`}
+        </KeysNote>
+      )}
     </div>
   );
 }
@@ -379,31 +443,22 @@ export function RapidTask({ task, cb, done }: { step: Step; task: Of<"rapid">; c
   }
 
   useNumberKeys(q?.options.length ?? 0, answer, started && !over && !fb && !done);
-  useEffect(() => {
-    if (started || done) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        sfx.tap();
-        setStarted(true);
-      }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [started, done]);
+  // Enter or Space starts the clock.
+  const start = () => {
+    sfx.tap();
+    setStarted(true);
+  };
+  useEnterKey(start, !started && !done);
+  useHotkey((e) => e.key === " " && !e.ctrlKey && !e.metaKey && !e.altKey, start, !started && !done);
 
   if (!started) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-xl border border-line bg-panel/60 p-6 text-center">
         <div className="font-display text-5xl text-amber glow">{task.seconds}s</div>
         <p className="text-[14px] text-muted">{task.items.length} quick questions. Speed builds your combo. Answer with 1, 2, 3 on your keyboard.</p>
-        <Btn
-          onClick={() => {
-            sfx.tap();
-            setStarted(true);
-          }}
-        >
+        <Btn onClick={start}>
           Start
+          <KeyHint>↵</KeyHint>
         </Btn>
       </div>
     );
@@ -475,6 +530,7 @@ export function ConfigTask({ step, task, cb, done }: { step: Step; task: Of<"con
         : lines.join("\n");
 
   function check(showMe = false) {
+    if (!showMe && results?.every(Boolean)) return; // already saved, wait for the result
     const t = showMe ? task.solution : current();
     const res = task.checks.map((c) => {
       try {
@@ -509,6 +565,45 @@ export function ConfigTask({ step, task, cb, done }: { step: Step; task: Of<"con
 
   const filledAll = task.mode !== "blanks" || blankIds.every((id) => values[id]);
 
+  // Keyboard, blanks: Tab moves between blanks, 1 to 9 picks an option for the blank in focus
+  // (then jumps to the next blank). Reorder: 1 to 9 picks a line, arrows move it.
+  // Enter (Ctrl+Enter inside the text box) saves and checks.
+  const [cur, setCur] = useState(0);
+  const groupRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const curBlank = task.mode === "blanks" ? task.blanks?.[blankIds[cur]] : undefined;
+  function choose(id: string, o: string) {
+    sfx.tap();
+    setValues((v) => ({ ...v, [id]: o }));
+    setResults(null);
+  }
+  useNumberKeys(
+    curBlank?.options.length ?? 0,
+    (n) => {
+      if (!curBlank) return;
+      choose(blankIds[cur], curBlank.options[n]);
+      if (cur + 1 < blankIds.length) {
+        setCur(cur + 1);
+        groupRefs.current[cur + 1]?.focus({ preventScroll: false });
+      }
+    },
+    task.mode === "blanks" && !done,
+  );
+  const [lineSel, setLineSel] = useState<number | null>(null);
+  useReorderKeys({
+    count: lines.length,
+    sel: lineSel,
+    setSel: setLineSel,
+    move: (i, d) => {
+      const next = lines.slice();
+      [next[i], next[i + d]] = [next[i + d], next[i]];
+      setLines(next);
+      setResults(null);
+      sfx.tap();
+    },
+    enabled: task.mode === "reorder" && !done,
+  });
+  useEnterKey(() => check(), !done && filledAll);
+
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-xl border border-line bg-[#070707]">
@@ -523,22 +618,39 @@ export function ConfigTask({ step, task, cb, done }: { step: Step; task: Of<"con
               if (!m) return <span key={i}>{part}</span>;
               const id = m[1];
               const b = task.blanks?.[id];
+              const k = blankIds.indexOf(id);
+              const isCur = k === cur && !done;
               return (
-                <span key={i} className="inline-flex gap-1 align-middle">
-                  {b?.options.map((o) => (
+                <span
+                  key={i}
+                  ref={(el) => {
+                    groupRefs.current[k] = el;
+                  }}
+                  role="radiogroup"
+                  aria-label={`Blank ${k + 1} of ${blankIds.length}. Press 1 to ${b?.options.length ?? 0} to choose.`}
+                  tabIndex={done ? -1 : 0}
+                  onFocus={() => setCur(k)}
+                  className={`inline-flex gap-1 rounded align-middle ${isCur ? "ring-1 ring-ink/50 ring-offset-2 ring-offset-[#070707]" : ""}`}
+                >
+                  {b?.options.map((o, n) => (
                     <button
                       key={o}
                       type="button"
+                      role="radio"
+                      aria-checked={values[id] === o}
+                      tabIndex={-1}
                       disabled={done}
                       onClick={() => {
-                        sfx.tap();
-                        setValues({ ...values, [id]: o });
-                        setResults(null);
+                        setCur(k);
+                        choose(id, o);
                       }}
                       className={`rounded border px-1.5 font-mono text-[12px] leading-5 transition ${
                         values[id] === o ? "border-amber bg-amber/20 text-amber" : "border-dashed border-line2 text-muted hover:border-amber hover:text-amber"
                       }`}
                     >
+                      <span aria-hidden className={`mr-1 text-[10.5px] text-faint ${isCur ? "" : "invisible"}`}>
+                        {n + 1}
+                      </span>
                       {o}
                     </button>
                   ))}
@@ -555,6 +667,10 @@ export function ConfigTask({ step, task, cb, done }: { step: Step; task: Of<"con
               setText(e.target.value);
               setResults(null);
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") e.currentTarget.blur();
+            }}
+            aria-label={`Edit ${task.path}`}
             spellCheck={false}
             rows={Math.min(22, text.split("\n").length + 1)}
             className="w-full resize-y bg-transparent p-3 font-mono text-[12.5px] leading-[1.55] text-ink outline-none scroll-thin"
@@ -562,8 +678,15 @@ export function ConfigTask({ step, task, cb, done }: { step: Step; task: Of<"con
         )}
         {task.mode === "reorder" && (
           <Reorder.Group axis="y" values={lines} onReorder={setLines} className="p-2">
-            {lines.map((l) => (
-              <Reorder.Item key={l} value={l} className="cursor-grab whitespace-pre rounded px-2 py-1 font-mono text-[12.5px] hover:bg-amber/10">
+            {lines.map((l, i) => (
+              <Reorder.Item
+                key={l}
+                value={l}
+                className={`flex cursor-grab gap-2 whitespace-pre rounded px-2 py-1 font-mono text-[12.5px] hover:bg-amber/10 ${lineSel === i ? "bg-panel2 ring-1 ring-ink" : ""}`}
+              >
+                <span aria-hidden className="w-4 shrink-0 select-none text-right text-[11px] text-faint">
+                  {i < 9 ? i + 1 : ""}
+                </span>
                 {l}
               </Reorder.Item>
             ))}
@@ -581,8 +704,16 @@ export function ConfigTask({ step, task, cb, done }: { step: Step; task: Of<"con
       )}
       {!done && (
         <>
+          <KeysNote>
+            {task.mode === "blanks"
+              ? "Keys: Tab moves to the next blank, 1, 2, 3 choose. Enter saves when every blank is filled."
+              : task.mode === "fix"
+                ? "Keys: type in the box. Ctrl+Enter saves and checks. Esc leaves the box."
+                : "Keys: press a line's number to pick it, arrow Up and Down move it, Enter saves."}
+          </KeysNote>
           <Btn onClick={() => check()} disabled={!filledAll}>
             Save and check
+            {filledAll && <KeyHint>{task.mode === "fix" ? "Ctrl ↵" : "↵"}</KeyHint>}
           </Btn>
           <HintBar
             hints={task.hints}
@@ -657,7 +788,10 @@ export function AllocateTask({ step, task, cb, done }: { step: Step; task: Of<"a
     finishIfFull(ram + vm.ramGb);
   }
 
-  const bar = (val: number, max: number, color: string, label: string) => (
+  // Keyboard: each VM keeps its number. Press it to place the VM, press it again to take it off.
+  useNumberKeys(task.vms.length, (i) => !fired.current && toggle(i), !done);
+
+  const bar =(val: number, max: number, color: string, label: string) => (
     <div>
       <div className="mb-1 flex justify-between font-mono text-[11px]">
         <span className="text-muted">{label}</span>
@@ -692,8 +826,9 @@ export function AllocateTask({ step, task, cb, done }: { step: Step; task: Of<"a
                 exit={{ scale: 0.5, opacity: 0 }}
                 type="button"
                 onClick={() => toggle(i)}
-                className="rounded-md border border-teal/60 bg-teal/10 px-2 py-1 font-mono text-[11.5px] text-teal"
+                className="flex items-center gap-1.5 rounded-md border border-teal/60 bg-teal/10 px-2 py-1 font-mono text-[11.5px] text-teal"
               >
+                {i < 9 && <OptionKey n={i + 1} small tone="border-teal/50 text-teal" />}
                 VM {task.vms[i].name} · {task.vms[i].cpus}c · {task.vms[i].ramGb}G ✕
               </motion.button>
             ))}
@@ -710,7 +845,10 @@ export function AllocateTask({ step, task, cb, done }: { step: Step; task: Of<"a
               onClick={() => toggle(i)}
               className="rounded-lg border border-line2 bg-panel2 px-2.5 py-1.5 text-left font-mono text-[12px] hover:border-amber"
             >
-              <div className="text-ink">VM {vm.name}</div>
+              <div className="flex items-center gap-1.5 text-ink">
+                {i < 9 && <OptionKey n={i + 1} small />}
+                VM {vm.name}
+              </div>
               <div className="text-muted">
                 {vm.cpus} vCPU · {vm.ramGb} GB
               </div>
@@ -719,6 +857,7 @@ export function AllocateTask({ step, task, cb, done }: { step: Step; task: Of<"a
         )}
       </div>
       {msg && <p className={`font-mono text-[12.5px] ${msg.startsWith("Refused") ? "text-red" : "text-yellow"}`}>{msg}</p>}
+      {!done && <KeysNote>Keys: press a VM&apos;s number to put it on the host. Press it again to take it off.</KeysNote>}
       {!done && (
         <HintBar
           hints={task.hints}

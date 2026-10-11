@@ -14,7 +14,7 @@ import { usePlay } from "@/store/play";
 import { useProgress } from "@/store/progress";
 import { useUi } from "@/store/ui";
 import ServerMap from "../map/ServerMap";
-import { Btn, MissionCard, type TaskCallbacks, type TaskResult } from "./common";
+import { Btn, KeyHint, MissionCard, plain, useEnterKey, useHotkey, type TaskCallbacks, type TaskResult } from "./common";
 import BudgetTask from "./BudgetTask";
 import { isGuess } from "@/content/schema";
 import IncidentTask from "./IncidentTask";
@@ -135,28 +135,16 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
     else sfx.fanfare();
   }
 
-  // Enter continues. Ctrl+Enter (Cmd+Enter on a Mac) works even from the terminal, and on the
-  // level summary it goes straight to the next level.
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
-      const force = e.ctrlKey || e.metaKey;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (!force && (tag === "INPUT" || tag === "TEXTAREA")) return;
-      if (result && !summary) {
-        e.preventDefault();
-        next();
-      } else if (force && summary) {
-        const nl = nextLevel(level.id);
-        if (nl) {
-          e.preventDefault();
-          router.push(`/play/${nl.id}`);
-        }
-      }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  });
+  // Enter continues. Ctrl+Enter (Cmd+Enter on a Mac) works even from the terminal. On the
+  // level summary Enter goes to the next level (or back to the path after the last one),
+  // and R starts the quick review when it is offered.
+  useEnterKey(next, !!result && !summary);
+  useEnterKey(() => {
+    const nl = nextLevel(level.id);
+    router.push(nl ? `/play/${nl.id}` : "/");
+  }, !!summary);
+  const dueOnSummary = summary && hydrated ? dueCards(useProgress.getState().review, dayKey()).length : 0;
+  useHotkey((e) => plain(e) && e.key.toLowerCase() === "r", () => router.push("/review"), dueOnSummary >= 3);
 
   function copyContext() {
     const t = step.task;
@@ -251,7 +239,15 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
             </span>
           )}
           <span className="hidden px-1 font-mono text-muted sm:inline">+{levelXp} XP</span>
-          <button type="button" onClick={() => useUi.getState().openDict()} className="h-8 rounded-md border border-line2 px-2.5 text-muted hover:border-ink hover:text-ink" title="Dictionary">
+          <button
+            type="button"
+            onClick={() => useUi.getState().openHelp()}
+            className="hidden h-8 rounded-md border border-line2 px-2.5 text-muted hover:border-ink hover:text-ink sm:block"
+            title="Keyboard shortcuts (press ?)"
+          >
+            Keys
+          </button>
+          <button type="button" onClick={() => useUi.getState().openDict()} className="h-8 rounded-md border border-line2 px-2.5 text-muted hover:border-ink hover:text-ink" title="Dictionary (press /)">
             ?
           </button>
           <button type="button" onClick={copyContext} className="h-8 rounded-md border border-line2 px-2.5 text-muted hover:border-ink hover:text-ink" title="Copy context for Claude">
@@ -365,8 +361,9 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                 </div>
               </div>
               {result.why && <p className="mt-4 text-[15px] leading-relaxed text-ink/90">{result.why}</p>}
-              <Btn kind={verdict === "bad" || verdict === "help" || verdict === "learn" ? "primary" : "teal"} onClick={next} className="mt-5 w-full">
-                {stepIdx + 1 < level.steps.length ? "Continue" : "Finish level"} <span className="ml-1 font-mono text-[12px] opacity-60">↵</span>
+              <Btn kind={verdict === "bad" || verdict === "help" || verdict === "learn" ? "primary" : "teal"} onClick={next} className="mt-5 w-full" autoFocus>
+                {stepIdx + 1 < level.steps.length ? "Continue" : "Finish level"}
+                <KeyHint>↵</KeyHint>
               </Btn>
             </motion.div>
           </motion.div>
@@ -409,18 +406,21 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
               {summary.earnedFreeze && <p className="text-[13px] text-teal">7 day streak! You earned a streak freeze.</p>}
               {summary.stars < 3 && <p className="font-mono text-[11px] text-muted">Replay without hints for 3 stars.</p>}
               <div className="flex flex-col gap-2">
+                {nl && (
+                  <Btn onClick={() => router.push(`/play/${nl.id}`)} autoFocus>
+                    Next: {nl.title}
+                    <KeyHint>↵</KeyHint>
+                  </Btn>
+                )}
                 {due >= 3 && (
                   <Btn kind="ghost" onClick={() => router.push("/review")}>
                     Quick review ({Math.min(due, 5)} cards)
+                    <KeyHint>R</KeyHint>
                   </Btn>
                 )}
-                {nl && (
-                  <Btn onClick={() => router.push(`/play/${nl.id}`)}>
-                    Next: {nl.title} <span className="ml-1 font-mono text-[12px] opacity-60">Ctrl ↵</span>
-                  </Btn>
-                )}
-                <Btn kind="ghost" onClick={() => router.push("/")}>
+                <Btn kind={nl ? "ghost" : "primary"} onClick={() => router.push("/")} autoFocus={!nl}>
                   Back to the path
+                  {!nl && <KeyHint>↵</KeyHint>}
                 </Btn>
               </div>
             </motion.div>

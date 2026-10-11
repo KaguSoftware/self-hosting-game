@@ -8,11 +8,14 @@ import NanoEditor from "./NanoEditor";
 import { describeFlag, flagsIn } from "@/content/flags";
 import { useProgress } from "@/store/progress";
 import { FLAG_SHOWINGS } from "../play/FlagNotes";
+import { plain, useHotkey } from "../play/common";
 
 export interface TerminalProps {
   /** Current step or incident id, so flag notes are not repeated within it. */
   stepId?: string;
   chips?: string[];
+  /** "Type this" commands. Tab on an empty line fills in the next one. */
+  guide?: string[];
   allowConsole?: boolean;
   onCommand?: (r: { code: number; isErrorish: boolean; line: string }) => void;
   disabled?: boolean;
@@ -27,10 +30,12 @@ const kindClass: Record<string, string> = {
   sys: "text-muted italic",
 };
 
-export default function Terminal({ stepId = "terminal", chips = [], allowConsole, onCommand, disabled, height = "h-[34vh] md:h-[min(36vh,340px)]" }: TerminalProps) {
+export default function Terminal({ stepId = "terminal", chips = [], guide, allowConsole, onCommand, disabled, height = "h-[34vh] md:h-[min(36vh,340px)]" }: TerminalProps) {
   const { state, active, lines, editor } = usePlay();
   const run = usePlay((s) => s.run);
   const [input, setInput] = useState("");
+  const chipIdx = useRef(0);
+  const [focused, setFocused] = useState(false);
   const [histIdx, setHistIdx] = useState<number | null>(null);
   const [options, setOptions] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +62,67 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
     inputRef.current?.focus();
   }, [insert]);
 
+  // ---- keyboard: windows ----
+  // Alt+1..9 (or Ctrl+Shift+1..9) switches window, Alt+N opens one, Alt+P opens the
+  // provider console when it is offered, T jumps back into the command line.
+  const digit = (e: KeyboardEvent) => (/^Digit[1-9]$/.test(e.code) ? Number(e.code.slice(5)) : 0);
+  useHotkey(
+    (e) => digit(e) > 0 && !e.metaKey && ((e.altKey && !e.ctrlKey && !e.shiftKey) || (e.ctrlKey && e.shiftKey && !e.altKey)),
+    (e) => {
+      const i = digit(e) - 1;
+      if (i < usePlay.getState().state.shells.length) usePlay.getState().setActive(i);
+      inputRef.current?.focus({ preventScroll: true });
+    },
+    !editor,
+    { inInput: "always" },
+  );
+  useHotkey(
+    (e) => e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyN",
+    () => newWindow(),
+    !editor && !disabled,
+    { inInput: "always" },
+  );
+  useHotkey(
+    (e) => e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyP",
+    () => openConsole(),
+    !!allowConsole && !hasConsole && !editor && !disabled,
+    { inInput: "always" },
+  );
+  useHotkey((e) => plain(e) && e.key.toLowerCase() === "t", () => inputRef.current?.focus(), !editor && !disabled);
+
   if (!sh) return null;
+
+  function newWindow() {
+    sfx.tap();
+    usePlay.getState().addWindow(undefined, "New window on your laptop.");
+  }
+
+  function openConsole() {
+    sfx.whoosh();
+    usePlay.getState().addWindow(CONSOLE_FRAME, "Provider web console. You are root on web-1, connected through the provider, not SSH.");
+  }
+
+  /**
+   * The next "Type this" command: the one after the line you have now if it is one of
+   * them, else the first one not run yet in this step.
+   */
+  function nextGuide(cur: string): string | undefined {
+    if (!guide?.length) return undefined;
+    const at = guide.indexOf(cur.trim());
+    if (at >= 0) return guide[(at + 1) % guide.length];
+    const ran = new Set(usePlay.getState().log.map((l) => l.line.trim()));
+    return guide.find((g) => !ran.has(g)) ?? guide[0];
+  }
+
+  function nextChip() {
+    if (!chips.length) {
+      const g = nextGuide(input);
+      if (g) setInput(g);
+      return;
+    }
+    tapChip(chips[chipIdx.current % chips.length]);
+    chipIdx.current += 1;
+  }
 
   function submit(text: string) {
     if (disabled) return;
@@ -94,9 +159,28 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
       submit(input);
       return;
     }
+    if (e.key === "Escape") {
+      // Step out of the terminal so letter keys (H, S, T, ?) work as shortcuts.
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.ctrlKey && !e.altKey && (e.key === " " || e.code === "Space")) {
+      e.preventDefault();
+      nextChip();
+      return;
+    }
     if (e.key === "Tab") {
+      // Shift+Tab leaves the terminal, so every other button stays reachable.
+      if (e.shiftKey) return;
       e.preventDefault();
       if (pending) return;
+      // On an empty line (or on a "Type this" command), Tab fills in the next one.
+      const g = (!input.trim() || guide?.includes(input.trim())) && nextGuide(input);
+      if (g) {
+        setInput(g);
+        setOptions([]);
+        return;
+      }
       const c = usePlay.getState().complete(input);
       setInput(c.line);
       setOptions(c.options.length > 1 ? c.options.slice(0, 30) : []);
@@ -167,6 +251,8 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
             key={i}
             type="button"
             onClick={() => usePlay.getState().setActive(i)}
+            title={i < 9 ? `Alt+${i + 1}` : undefined}
+            aria-pressed={i === active}
             className={`shrink-0 rounded-md px-2 py-0.5 font-mono text-[12px] transition ${
               i === active ? "bg-panel2 text-ink" : "text-muted hover:text-ink"
             }`}
@@ -176,28 +262,26 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
         ))}
         <button
           type="button"
-          title="New window (your laptop)"
-          onClick={() => {
-            sfx.tap();
-            usePlay.getState().addWindow(undefined, "New window on your laptop.");
-          }}
+          title="New window on your laptop (Alt+N)"
+          onClick={newWindow}
           className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[12px] text-muted hover:bg-panel2 hover:text-ink"
         >
           + window
+          <span aria-hidden className="ml-1.5 hidden text-[11px] opacity-60 md:inline">
+            Alt N
+          </span>
         </button>
         {allowConsole && !hasConsole && (
           <button
             type="button"
-            title="Your provider's web console: a root shell that works without SSH"
-            onClick={() => {
-              sfx.whoosh();
-              usePlay
-                .getState()
-                .addWindow(CONSOLE_FRAME, "Provider web console. You are root on web-1, connected through the provider, not SSH.");
-            }}
+            title="Your provider's web console: a root shell that works without SSH (Alt+P)"
+            onClick={openConsole}
             className="ml-auto shrink-0 rounded-md border border-line2 px-2 py-0.5 font-mono text-[11px] text-ink hover:border-ink"
           >
             open provider console
+            <span aria-hidden className="ml-1.5 hidden opacity-60 md:inline">
+              Alt P
+            </span>
           </button>
         )}
       </div>
@@ -228,6 +312,9 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
                 setOptions([]);
               }}
               onKeyDown={onKey}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              data-terminal-input
               type={pending?.secret ? "password" : "text"}
               autoCapitalize="off"
               autoComplete="off"
@@ -244,16 +331,21 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
 
       {/* chips + run (mobile friendly) */}
       <div className="flex items-center gap-1.5 overflow-x-auto border-t border-line bg-panel/60 px-2 py-1.5 scroll-thin">
-        {chips.map((c) => (
+        {chips.map((c, i) => (
           <button
             key={c}
             type="button"
             onClick={() => tapChip(c)}
-            className="shrink-0 rounded-md border border-line2 bg-panel2 px-2.5 py-1 font-mono text-[12px] text-ink/90 hover:border-ink"
+            className={`shrink-0 rounded-md border bg-panel2 px-2.5 py-1 font-mono text-[12px] text-ink/90 hover:border-ink ${
+              i === chipIdx.current % chips.length ? "border-ink/60" : "border-line2"
+            }`}
           >
             {c}
           </button>
         ))}
+        <span aria-hidden className="ml-auto hidden shrink-0 pl-2 font-mono text-[11px] text-faint md:inline">
+          {disabled || editor ? "" : !focused ? "Press T to type here" : chips.length ? "Ctrl Space adds the next one" : guide?.length && !input ? "Tab fills in the command" : ""}
+        </span>
         <button
           type="button"
           onClick={() => {

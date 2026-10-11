@@ -90,7 +90,7 @@ export default function TerminalTask({
         </div>
         {task.guide && !done && (
           <div className="rounded-xl border border-line2 bg-panel2/60 px-4 py-3">
-            <div className="mb-2 text-[12px] text-muted">Type this and press Enter, or tap it</div>
+            <div className="mb-2 text-[12px] text-muted">Type this and press Enter. Tab fills it in for you.</div>
             <div className="flex flex-wrap gap-2">
               {task.guide.map((g) => (
                 <button
@@ -111,6 +111,7 @@ export default function TerminalTask({
       <Terminal
         stepId={step.id}
         chips={task.chips}
+        guide={task.guide}
         allowConsole={allowConsole || task.console}
         disabled={done || busy}
         onCommand={(r) => {
@@ -131,6 +132,7 @@ export default function TerminalTask({
         <HintBar
           hints={task.hints}
           threshold={beginner ? 1 : 2}
+          terminal
           failures={failures}
           onHint={() => setUsedHints(true)}
           onShowMe={() => void showMe()}

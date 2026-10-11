@@ -9,7 +9,7 @@ import type { Hop, TraceResult } from "@/sim/types";
 import { usePlay } from "@/store/play";
 import { sfx } from "@/lib/sfx";
 import ServerMap from "../map/ServerMap";
-import { GoalList, HintBar, type TaskCallbacks } from "./common";
+import { GoalList, HintBar, OptionKey, useNumberKeys, type TaskCallbacks } from "./common";
 
 type T = Extract<Task, { kind: "map" }>;
 
@@ -148,9 +148,22 @@ export default function MapTask({ step, task, cb, done }: { step: Step; task: T;
     task.path.slice(0, routeIdx).forEach((n, i) => (tags[n] = [`${i + 1}`]));
   }
 
+  // Keyboard: numbers pick a label (match), letters tap a box, numbers flip switches (toggle).
+  const chipsLeft = task.mode === "match" ? task.pairs.map((_, i) => i).filter((i) => !placed[i]) : [];
+  useNumberKeys(chipsLeft.length, (n) => setChip(chip === chipsLeft[n] ? null : chipsLeft[n]), task.mode === "match" && !done);
+
   return (
     <div className="space-y-3">
       <p className="text-[14px] text-muted">{task.prompt}</p>
+      {!done && (
+        <p className="hidden text-[12px] text-faint sm:block">
+          {task.mode === "toggle"
+            ? "Keys: press a switch's number to flip it."
+            : task.mode === "match"
+              ? "Keys: press a label's number, then the letter on its box."
+              : "Keys: press the letter on a box to pick it."}
+        </p>
+      )}
       {task.mode === "match" && (
         <div className="flex flex-wrap gap-1.5">
           {task.pairs.map((p, i) =>
@@ -163,10 +176,11 @@ export default function MapTask({ step, task, cb, done }: { step: Step; task: T;
                   sfx.tap();
                   setChip(chip === i ? null : i);
                 }}
-                className={`rounded-md border px-3 py-1.5 text-[13.5px] transition ${
+                className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-[13.5px] transition ${
                   chip === i ? "border-ink bg-ink text-bg" : "border-line2 bg-panel2 text-ink hover:border-ink"
                 }`}
               >
+                {chipsLeft.indexOf(i) < 9 && <OptionKey n={chipsLeft.indexOf(i) + 1} inline tone={chip === i ? "border-bg/40 text-bg" : undefined} />}
                 {p.chip}
               </motion.button>
             ),
@@ -184,6 +198,7 @@ export default function MapTask({ step, task, cb, done }: { step: Step; task: T;
         tags={tags}
         toggles={toggles}
         onToggle={toggle}
+        keys={!done}
       />
       {!done && <HintBar hints={task.hints} failures={failures} onHint={() => setUsedHints(true)} onShowMe={showMe} />}
     </div>

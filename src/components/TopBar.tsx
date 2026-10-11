@@ -40,7 +40,15 @@ export default function TopBar() {
               <span className="block text-[10px] text-muted">{p.xp} XP</span>
             </span>
           </Link>
-          <button type="button" onClick={() => useUi.getState().openDict()} className="rounded-md border border-line2 px-2 py-1 text-muted hover:text-amber" title="Dictionary">
+          <button
+            type="button"
+            onClick={() => useUi.getState().openHelp()}
+            className="hidden rounded-md border border-line2 px-2 py-1 text-muted hover:text-amber sm:block"
+            title="Keyboard shortcuts (press ?)"
+          >
+            keys
+          </button>
+          <button type="button" onClick={() => useUi.getState().openDict()} className="rounded-md border border-line2 px-2 py-1 text-muted hover:text-amber" title="Dictionary (press /)">
             ?
           </button>
           <button

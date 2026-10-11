@@ -130,4 +130,9 @@ button:disabled {
     outline: 2px solid var(--color-ink);
     outline-offset: 2px;
   }
+  /* Tabbing scrolls focused things clear of the sticky headers. */
+  html {
+    scroll-padding-top: 128px;
+    scroll-padding-bottom: 72px;
+  }
 }
