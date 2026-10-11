@@ -6,8 +6,7 @@ import { defaultVars, type PlayState } from "@/engine/replay";
 import { traceHttp } from "@/sim/net";
 import { usePlay } from "@/store/play";
 import Terminal from "../terminal/Terminal";
-import FlagNotes from "./FlagNotes";
-import { flagsIn, flagsInProse } from "@/content/flags";
+import CommandParts from "./CommandParts";
 import { GoalList, HintBar, type TaskCallbacks } from "./common";
 
 type T = Extract<Task, { kind: "terminal" }>;
@@ -37,8 +36,6 @@ export default function TerminalTask({
   const fired = useRef(false);
   const lastCount = useRef(0);
 
-  // Flags the intel card already explains are not repeated under "Type this".
-  const intelFlags = useMemo(() => new Set((step.intel?.lines ?? []).flatMap(flagsInProse).map((n) => n.key)), [step.intel]);
   const met = useMemo(() => goalsMet(task.goals, goalCtx(state, log)), [task.goals, state, log, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   const count = met.filter(Boolean).length;
 
@@ -104,7 +101,7 @@ export default function TerminalTask({
                 </button>
               ))}
             </div>
-            <FlagNotes notes={task.guide.flatMap(flagsIn).filter((n) => !intelFlags.has(n.key))} where={step.id} className="mt-2.5" />
+            <CommandParts lines={task.guide} where={step.id} className="mt-2.5" />
           </div>
         )}
       </div>

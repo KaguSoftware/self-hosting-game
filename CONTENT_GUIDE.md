@@ -48,3 +48,7 @@ When a new world uses a new flag, add it to `flags.ts`.
 - No em or en dashes in any copy.
 - Multiple-choice answers are mixed automatically. A test makes sure right answers are not bunched in one position.
 - The first time a command is used, show it with `guide` (a tap-to-type button). Explain what happened with `after`.
+
+### 4. Every part of every command is explained
+
+Under every "Type this" command, the player sees what each part means: the command, its sub-command, each flag and flag value, paths, `user:group`, permission numbers, URLs, and symbols like `|`, `&&`, `>` and `~`. The explanations live in `src/content/explain.ts`. `src/content/explain.test.ts` fails if any part of any guide, chip, show me line, incident fix or cheat sheet command has no explanation. When a world brings a new command, sub-command, flag that takes a value, or argument shape, add it to `explain.ts` (and the flag to `flags.ts`). Explain the reason, not just the name: "-R = recursive: the folder and everything inside it".
