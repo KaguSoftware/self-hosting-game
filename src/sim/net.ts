@@ -1,5 +1,6 @@
 import { findSite, parseCaddyfile } from "./caddy";
 import { readText } from "./fs";
+import { containerCluster } from "./pg/cluster";
 import type { Container, Hop, HopId, Host, TraceResult, World } from "./types";
 
 export interface Resolved {
@@ -98,11 +99,36 @@ function caddyConfig(host: Host, c: Container): string {
   return (bind && readText(host, bind.source)) ?? "";
 }
 
-function parseDbUrl(url: string | undefined): { host: string; port: number } | undefined {
+function parseDbUrl(url: string | undefined): { host: string; port: number; user?: string; password?: string; db?: string; sslmode?: string } | undefined {
   if (!url) return undefined;
-  const m = /^postgres(?:ql)?:\/\/(?:[^@]*@)?([^:/?]+)(?::(\d+))?/.exec(url);
+  const m = /^postgres(?:ql)?:\/\/(?:([^:@/]*)(?::([^@/]*))?@)?([^:/?]+)(?::(\d+))?(?:\/([^?]*))?(?:\?(.*))?/.exec(url);
   if (!m) return undefined;
-  return { host: m[1], port: m[2] ? Number(m[2]) : 5432 };
+  const dec = (s?: string) => {
+    try {
+      return s ? decodeURIComponent(s) : s;
+    } catch {
+      return s;
+    }
+  };
+  const sslmode = /(?:^|&)sslmode=([^&]*)/.exec(m[6] ?? "")?.[1];
+  return { host: m[3], port: m[4] ? Number(m[4]) : 5432, user: dec(m[1]) || undefined, password: dec(m[2]), db: dec(m[5]) || undefined, sslmode };
+}
+
+/** Postgres's answer to the app's login: undefined when it lets the app in. */
+function pgLogin(host: Host, target: Container, db: NonNullable<ReturnType<typeof parseDbUrl>>): string | undefined {
+  // The official image has no TLS set up. node-postgres says this when sslmode asks for it.
+  if (db.sslmode && !["disable", "allow", "prefer"].includes(db.sslmode)) return "The server does not support SSL connections";
+  const cl = containerCluster(host, target);
+  const user = db.user ?? "root";
+  const role = cl.roles[user];
+  // POSTGRES_PASSWORD only counts on the very first start: the role keeps the password it got then.
+  if (target.env.POSTGRES_HOST_AUTH_METHOD !== "trust" && (!role || role.password === undefined || role.password !== (db.password ?? ""))) {
+    return `password authentication failed for user "${user}"`;
+  }
+  if (role && !role.login) return `role "${user}" is not permitted to log in`;
+  const name = db.db ?? user;
+  if (!cl.databases[name]) return `database "${name}" does not exist`;
+  return undefined;
 }
 
 export interface AppCheck {
@@ -131,6 +157,10 @@ export function appToDb(host: Host, app: Container): AppCheck {
   }
   if (target.status !== "running") {
     return { ok: false, hop: "db", note: `connect ECONNREFUSED: ${db.host} is not running`, status: 500 };
+  }
+  if (target.kind === "postgres") {
+    const refused = pgLogin(host, target, db);
+    if (refused) return { ok: false, hop: "db", note: refused, status: 500 };
   }
   return { ok: true, hop: "db", note: `Postgres on ${db.host}:${db.port} answered`, status: 200 };
 }

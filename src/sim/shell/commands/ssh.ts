@@ -5,7 +5,16 @@ import { keyBody, sshCheck, type SshCheck } from "../../sshAuth";
 import { parseSshd, sshdDump } from "../../sshd";
 import { dateTime } from "../../time";
 import { hashB64 } from "../../util";
+import { takeTunnelLog } from "../../pg/connect";
+import type { Frame } from "../../types";
 import type { Command, Ctx } from "../ctx";
+import { runDetachedLine } from "../detached";
+
+interface Forward {
+  laptopPort: number;
+  remoteHost: string;
+  remotePort: number;
+}
 
 interface SshOpts {
   user: string;
@@ -13,6 +22,26 @@ interface SshOpts {
   verbose: boolean;
   identity?: string;
   noPubkey: boolean;
+  /** -L LOCALPORT:HOST:PORT */
+  forwards?: Forward[];
+  /** -N: no shell, just keep the tunnels open. */
+  noShell?: boolean;
+  /** -f: go to the background after logging in. */
+  background?: boolean;
+  /** -t: force a terminal for a remote command. */
+  tty?: boolean;
+  /** Words after the destination: run this on the server and come back. */
+  command?: string;
+}
+
+/** "5433:127.0.0.1:5432" or "127.0.0.1:5433:127.0.0.1:5432". */
+function parseForward(spec: string): Forward | undefined {
+  const parts = spec.split(":");
+  if (parts.length === 4) parts.shift();
+  if (parts.length !== 3) return undefined;
+  const [lp, host, rp] = parts;
+  if (!/^\d+$/.test(lp) || !/^\d+$/.test(rp) || !host) return undefined;
+  return { laptopPort: Number(lp), remoteHost: host.replace(/^\[|\]$/g, ""), remotePort: Number(rp) };
 }
 
 function parseSshArgs(ctx: Ctx, argv: string[]): SshOpts | string {
@@ -21,8 +50,18 @@ function parseSshArgs(ctx: Ctx, argv: string[]): SshOpts | string {
   let noPubkey = false;
   let dest: string | undefined;
   let loginUser: string | undefined;
+  const forwards: Forward[] = [];
+  let noShell = false;
+  let background = false;
+  let tty = false;
+  let command: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (dest) {
+      // ssh stops reading options at the destination: the rest is the remote command.
+      command = argv.slice(i).join(" ");
+      break;
+    }
     if (/^-v+$/.test(a)) verbose = true;
     else if (a === "-i") identity = ctx.path(argv[++i] ?? "");
     else if (a === "-l") loginUser = argv[++i];
@@ -33,16 +72,32 @@ function parseSshArgs(ctx: Ctx, argv: string[]): SshOpts | string {
       const opt = argv[++i] ?? "";
       if (/^PubkeyAuthentication=no$/i.test(opt)) noPubkey = true;
       if (/^PreferredAuthentications=password$/i.test(opt)) noPubkey = true;
-    } else if (a === "-L" || a === "-R" || a === "-N") {
-      return "Tunnels arrive in a later world. For now: ssh user@host";
-    } else if (!a.startsWith("-") && !dest) dest = a;
-    else if (!a.startsWith("-") && dest) return "Running a single remote command arrives in a later world. Log in first, then type it.";
+    } else if (/^-[NfTtqC]*L/.test(a)) {
+      // -L 5433:127.0.0.1:5432, -L5433:..., or flags in front like -NL
+      const flags = /^-([NfTtqC]*)L(.*)$/.exec(a)!;
+      for (const ch of flags[1]) if (ch === "N") noShell = true;
+      if (flags[1].includes("f")) background = true;
+      const spec = flags[2] || argv[++i] || "";
+      const f = parseForward(spec);
+      if (!f) return `Bad local forwarding specification '${spec}'`;
+      forwards.push(f);
+    } else if (a === "-R" || a === "-D" || /^-[NfTtqC]*[RD]/.test(a)) {
+      return "This game has local tunnels only (ssh -L). Remote (-R) and SOCKS (-D) tunnels work the same idea in reverse.";
+    } else if (/^-[NfTtqC]+$/.test(a)) {
+      if (a.includes("N")) noShell = true;
+      if (a.includes("f")) background = true;
+      if (a.includes("t")) tty = true;
+    } else if (!a.startsWith("-")) dest = a;
   }
-  if (!dest) return "usage: ssh [-v] [-i identity_file] [-o option] destination";
+  if (!dest) return "usage: ssh [-v] [-i identity_file] [-L port:host:hostport] [-o option] destination [command]";
   let user = loginUser ?? ctx.realUser;
   let target = dest;
   if (dest.includes("@")) [user, target] = dest.split("@");
-  return { user, target, verbose, identity, noPubkey };
+  if (background && !noShell && command === undefined) return "Cannot fork into background without a command to execute.";
+  for (const f of forwards) {
+    if (f.laptopPort < 1024 && ctx.user !== "root") return "Privileged ports can only be forwarded by root.";
+  }
+  return { user, target, verbose, identity, noPubkey, forwards: forwards.length ? forwards : undefined, noShell, background, tty, command };
 }
 
 function knownHostsPath(ctx: Ctx) {
@@ -109,15 +164,56 @@ function motd(ctx: Ctx): string {
   ].join("\n");
 }
 
-function login(ctx: Ctx, o: SshOpts, method: "publickey" | "password") {
+function login(ctx: Ctx, o: SshOpts, method: "publickey" | "password"): number {
   const vps = ctx.w.hosts.vps;
   const u = vps.users[o.user];
   const fp = method === "publickey" ? ` ssh2: ED25519 SHA256:${hashB64(ctx.realUser + "key", 43)}` : " ssh2";
   vps.journal.push({ t: ctx.w.clock, unit: "ssh", msg: `Accepted ${method} for ${o.user} from ${HOME_PUBLIC_IP} port 51234${fp}` });
   vps.journal.push({ t: ctx.w.clock, unit: "ssh", msg: `pam_unix(sshd:session): session opened for user ${o.user}(uid=${u.uid}) by ${o.user}(uid=0)` });
+  ctx.emit.trace = { ...(ctx.emit.trace ?? sshCheck(ctx.w, ctx.realUser, o.user, o.target).trace), ok: true };
+  if (o.command !== undefined) return remoteCommand(ctx, o);
+  if (o.noShell) {
+    openTunnels(ctx, o, o.background ? undefined : ctx.sh.id);
+    // The window stays busy until Ctrl+C, like the real ssh -N.
+    if (!o.background) ctx.prompt({ prompt: "", secret: false, data: { ...o, stage: "tunnel" } });
+    return 0;
+  }
   ctx.out(motd(ctx));
   ctx.sh.frames.push({ host: "vps", user: o.user, cwd: u.home, via: "ssh", remote: o.target, loginGroups: userGroups(vps, o.user) });
-  ctx.emit.trace = { ...(ctx.emit.trace ?? sshCheck(ctx.w, ctx.realUser, o.user, o.target).trace), ok: true };
+  openTunnels(ctx, o, ctx.sh.id);
+  return 0;
+}
+
+/** Start listening on the laptop for each -L. */
+function openTunnels(ctx: Ctx, o: SshOpts, shellId: string | undefined) {
+  for (const f of o.forwards ?? []) {
+    const tunnels = (ctx.w.tunnels ??= []);
+    if (tunnels.some((t) => t.laptopPort === f.laptopPort)) {
+      ctx.err(`bind [127.0.0.1]:${f.laptopPort}: Address already in use\nchannel_setup_fwd_listener_tcpip: cannot listen to port: ${f.laptopPort}\nCould not request local forwarding.`);
+      continue;
+    }
+    tunnels.push({ ...f, user: o.user, ...(shellId ? { shellId } : {}), channel: 2 });
+  }
+}
+
+/** ssh user@host 'cmd': run it on the server with no terminal, print what it printed, come back. */
+function remoteCommand(ctx: Ctx, o: SshOpts & { sudoOk?: boolean }): number {
+  const vps = ctx.w.hosts.vps;
+  const u = vps.users[o.user];
+  const cmd = o.command ?? "";
+  if (o.user !== "root" && /(^|[;&|]\s*)sudo\s/.test(cmd.trim()) && !o.sudoOk) {
+    if (!o.tty) {
+      ctx.err("sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper\nsudo: a password is required");
+      return 1;
+    }
+    ctx.prompt({ prompt: `[sudo] password for ${o.user}: `, secret: true, data: { ...o, stage: "rsudo", tries: 0 } });
+    return 0;
+  }
+  const frame: Frame = { host: "vps", user: o.user, cwd: u.home, via: "ssh", remote: o.target, loginGroups: userGroups(vps, o.user) };
+  const r = runDetachedLine(ctx.w, frame, cmd);
+  if (r.out) ctx.out(r.out);
+  if (o.tty) ctx.err(`Connection to ${o.target} closed.`);
+  return r.code;
 }
 
 function refuse(ctx: Ctx, o: SshOpts, c: SshCheck) {
@@ -141,8 +237,7 @@ function authenticate(ctx: Ctx, o: SshOpts): number {
       ctx.prompt({ prompt: `Enter passphrase for key '${o.identity ?? ctx.home + "/.ssh/id_ed25519"}': `, secret: true, data: { ...o, stage: "passphrase" } });
       return 0;
     }
-    login(ctx, o, "publickey");
-    return 0;
+    return login(ctx, o, "publickey");
   }
   if (c.passwordPrompt) {
     if (c.keyRefusal) ctx.w.hosts.vps.journal.push({ t: ctx.w.clock, unit: "ssh", msg: c.keyRefusal });
@@ -188,6 +283,27 @@ export const ssh: Command = {
   },
   resume(ctx, p, input) {
     const o = p.data as unknown as SshOpts & { stage: string; tries?: number };
+    if (o.stage === "tunnel") {
+      // ssh -N reads nothing. It only prints its own notes (failed channels) here.
+      const notes = takeTunnelLog(ctx.w, ctx.sh.id);
+      if (notes.length) ctx.err(notes.join("\n"));
+      ctx.prompt({ prompt: "", secret: false, data: p.data });
+      return 0;
+    }
+    if (o.stage === "rsudo") {
+      const pw = ctx.w.hosts.vps.users[o.user]?.password;
+      if (pw === undefined || input !== pw) {
+        const tries = (o.tries ?? 0) + 1;
+        if (tries >= 3) {
+          ctx.err(`sudo: 3 incorrect password attempts\nConnection to ${o.target} closed.`);
+          return 1;
+        }
+        ctx.err("Sorry, try again.");
+        ctx.prompt({ prompt: `[sudo] password for ${o.user}: `, secret: true, data: { ...p.data, tries } });
+        return 0;
+      }
+      return remoteCommand(ctx, { ...o, sudoOk: true });
+    }
     if (o.stage === "hostkey") {
       const a = input.trim();
       if (a === "no") {
@@ -209,16 +325,12 @@ export const ssh: Command = {
         ctx.prompt({ prompt: `Enter passphrase for key '${o.identity ?? ctx.home + "/.ssh/id_ed25519"}': `, secret: true, data: p.data });
         return 1;
       }
-      login(ctx, o, "publickey");
-      return 0;
+      return login(ctx, o, "publickey");
     }
     if (o.stage === "password") {
       const c = sshCheck(ctx.w, ctx.realUser, o.user, o.target, { identity: o.identity, noPubkey: true });
       const pw = ctx.w.hosts.vps.users[o.user]?.password;
-      if (c.passwordWorks && input === pw) {
-        login(ctx, o, "password");
-        return 0;
-      }
+      if (c.passwordWorks && input === pw) return login(ctx, o, "password");
       ctx.w.hosts.vps.journal.push({
         t: ctx.w.clock,
         unit: "ssh",

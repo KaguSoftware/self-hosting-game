@@ -10,6 +10,7 @@ import { SYSTEMD_COMMANDS } from "./commands/systemd";
 import { TEXT_COMMANDS } from "./commands/text";
 import { UFW_COMMANDS } from "./commands/ufw";
 import { USER_COMMANDS } from "./commands/users";
+import { PG_COMMANDS } from "../pg/commands";
 import type { Command } from "./ctx";
 // Registers Caddy's boot, caddy reload and certificate behaviour with the Docker sim.
 import "../docker/caddy";
@@ -31,6 +32,7 @@ const GROUPS: [string, Command[]][] = [
   ["Scripts", SCRIPT_COMMANDS],
   ["Jobs and backups", OPS_COMMANDS],
   ["Containers", DOCKER_COMMANDS],
+  ["Database", PG_COMMANDS],
 ];
 
 const help: Command = {

@@ -288,6 +288,13 @@ function bootNext(host: Host, c: Container): BootResult {
     }
     const nf = /getaddrinfo ENOTFOUND (\S+)/.exec(db.note);
     if (nf) log(c, `Error: getaddrinfo ENOTFOUND ${nf[1]}`, "    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:120:26) {", "  errno: -3008,", "  code: 'ENOTFOUND',", "  syscall: 'getaddrinfo',", `  hostname: '${nf[1]}'`, "}");
+    // Postgres answered but said no (node-postgres error objects).
+    const pg = /^(password authentication failed for user "[^"]+"|database "[^"]+" does not exist|role "[^"]+" is not permitted to log in)/.exec(db.note);
+    if (pg) {
+      const code = pg[1].startsWith("password") ? "28P01" : pg[1].startsWith("database") ? "3D000" : "28000";
+      log(c, `error: ${pg[1]}`, "    at /app/node_modules/pg/lib/client.js:545:17", "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {", `  length: ${pg[1].length + 69},`, "  severity: 'FATAL',", `  code: '${code}',`, "}");
+    }
+    if (db.note.startsWith("The server does not support SSL connections")) log(c, "Error: The server does not support SSL connections", "    at Socket.<anonymous> (/app/node_modules/pg/lib/connection.js:77:37)");
   }
   return {};
 }
@@ -460,6 +467,18 @@ export interface ExecCtx {
   out(s: string): void;
   err(s: string): void;
   info(s: string): void;
+  /** exec -u. Undefined means root. */
+  user?: string;
+  /** exec -e values. */
+  env?: Record<string, string>;
+  /** Input handed to the process (only with -i, or compose exec which has it on by default). */
+  stdin?: string;
+  /** -t: a terminal was allocated. */
+  tty?: boolean;
+  /** -i: stdin is attached (the keyboard, or a pipe). */
+  interactive?: boolean;
+  /** Ask the player something; resumes through the named command (psql sessions). */
+  prompt?(p: { prompt: string; secret: boolean; cmd: string; data: Record<string, unknown> }): void;
 }
 
 /** Return a number to handle the command, undefined to pass it on. */
@@ -582,12 +601,6 @@ export function execIn(x: ExecCtx): number {
       x.out("/var/run/postgresql:5432 - accepting connections");
       return 0;
     }
-    case "psql":
-    case "pg_dump":
-    case "pg_restore":
-    case "createdb":
-      x.info(`${base} inside the database container comes in a later world.`);
-      return 0;
     case "wget":
     case "curl": {
       const url = argv.find((a) => /^https?:\/\//.test(a)) ?? argv.find((a) => !a.startsWith("-") && a !== base);

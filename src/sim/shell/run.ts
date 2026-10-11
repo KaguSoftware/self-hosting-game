@@ -7,6 +7,7 @@ import type { Ctx, RunResult } from "./ctx";
 import { parse, ParseError, type Sequence, type SimpleCommand, type Word } from "./parse";
 import { COMMANDS, NEEDS_ANY_PACKAGE, NEEDS_PACKAGE, NOT_INSTALLED_HINT } from "./registry";
 import { writeRedirect } from "./redirect";
+import { setDetachedRunner } from "./detached";
 
 setAutoFreeze(false);
 
@@ -462,8 +463,15 @@ function resumePending(ex: Exec, p: Pending, input: string): number {
 export function cancelPending(world: World, shell: Shell): RunResult {
   const sh = createDraft(shell) as Shell;
   const w = createDraft(world) as World;
+  const out: OutLine[] = [];
+  // Ctrl+C in the window holding ssh -N closes the tunnel.
+  if (sh.pending?.cmd === "ssh" && sh.pending.data.stage === "tunnel" && w.tunnels) {
+    for (const t of w.tunnels) if (t.shellId === sh.id && t.log?.length) out.push({ text: t.log.join("\n"), kind: "err" });
+    w.tunnels = w.tunnels.filter((t) => t.shellId !== sh.id);
+  }
   sh.pending = undefined;
-  return { world: finishDraft(w) as World, shell: finishDraft(sh) as Shell, out: [{ text: "^C", kind: "out" }], code: 130 };
+  out.push({ text: "^C", kind: "out" });
+  return { world: finishDraft(w) as World, shell: finishDraft(sh) as Shell, out, code: 130 };
 }
 
 /**
@@ -484,6 +492,8 @@ export function runDetached(w: World, frame: Frame, line: string, vars: Record<s
   if (sh.pending) code = code || 1;
   return { code, out: ex.out.map((o) => o.text).join("\n") };
 }
+
+setDetachedRunner(runDetached);
 
 /** Run many lines in a row (show me, replays, tests). */
 export function runScript(

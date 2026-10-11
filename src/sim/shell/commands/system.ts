@@ -383,6 +383,8 @@ export const exit: Command = {
     }
     const f = sh.frames.pop()!;
     if (f.via === "ssh") {
+      // Tunnels opened with this login (ssh -L without -N) close with it.
+      if (ctx.w.tunnels?.some((t) => t.shellId === sh.id)) ctx.w.tunnels = ctx.w.tunnels.filter((t) => t.shellId !== sh.id);
       ctx.out(`logout\nConnection to ${f.remote ?? ctx.w.hosts[f.host].publicIp} closed.`);
     } else if (f.via === "console") {
       ctx.out("logout");

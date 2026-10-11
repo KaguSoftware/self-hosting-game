@@ -1,5 +1,6 @@
 // The whole simulated universe. Pure data, no functions, so it can be
 // cloned, snapshotted, replayed and compared in tests.
+import type { PgDatabase, PgRole, PgTunnel } from "./pg/types";
 
 export type HostId = "laptop" | "vps";
 
@@ -218,6 +219,8 @@ export interface World {
   acme?: AcmeState;
   /** Pretend cloud storage for offsite backups: "remote:bucket" -> path -> object. */
   storage?: { buckets: Record<string, Record<string, { content: string; sizeBytes: number; at: number }>> };
+  /** Open SSH tunnels from the laptop (ssh -L). */
+  tunnels?: PgTunnel[];
 }
 
 // ---------- docker ----------
@@ -263,6 +266,10 @@ export interface PgData {
   user: string;
   db: string;
   password: string;
+  /** Filled in the first time something changes the cluster (see pg/cluster.ts). Until then
+   *  the roles and databases follow from user, db and password above. */
+  roles?: Record<string, PgRole>;
+  databases?: Record<string, PgDatabase>;
 }
 
 export interface ComposeProject {

@@ -219,7 +219,7 @@ INCIDENTS.push(
 // ---------- World 6 ----------
 const HTTPS = "https://crumb.shop";
 const reloadCaddy = (w: Parameters<Incident["breakIt"]>[0]) =>
-  runDetached(w, DEPLOY_SHOP, "docker compose exec -w /etc/caddy caddy caddy reload");
+  runDetached(w, DEPLOY_SHOP, "docker compose exec -T -w /etc/caddy caddy caddy reload");
 
 INCIDENTS.push(
   {
