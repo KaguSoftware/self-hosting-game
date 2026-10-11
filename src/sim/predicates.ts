@@ -311,3 +311,33 @@ export const imageBaked =
     const baked = localImage(vpsHost(g), ref)?.meta?.baked ?? {};
     return value === undefined ? key in baked : baked[key] === value;
   };
+
+// ---------- caddy and https ----------
+
+/** Let's Encrypt issued a certificate for this domain, and Caddy still has it. */
+export const certIssued =
+  (domain: string): Check =>
+  (g) =>
+    !!g.world.certs[domain];
+
+/** A running Caddy container has LOADED a config matching re (saving the file is not enough). */
+export const caddyLoaded =
+  (re: RegExp): Check =>
+  (g) =>
+    Object.values(g.world.hosts.vps.docker.containers).some((c) => c.kind === "caddy" && c.status === "running" && re.test(c.caddyConfig ?? ""));
+
+/** Only this service publishes ports: everything else stays on the private network. */
+export const onlyPublisher =
+  (service: string): Check =>
+  (g) => {
+    const cs = Object.values(g.world.hosts.vps.docker.containers).filter((c) => c.ports.length);
+    return cs.length > 0 && cs.every((c) => c.service === service || c.name === service);
+  };
+
+/** A container has a volume mounted at this path inside it (caddy_data at /data). */
+export const volumeMounted =
+  (service: string, target: string): Check =>
+  (g) => {
+    const c = findDockerContainer(g.world.hosts.vps, service);
+    return !!c?.mounts.some((m) => m.type === "volume" && m.target === target);
+  };

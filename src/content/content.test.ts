@@ -14,8 +14,9 @@ import { world2 } from "./worlds/w2";
 import { world3 } from "./worlds/w3";
 import { world4 } from "./worlds/w4";
 import { world5 } from "./worlds/w5";
+import { world6 } from "./worlds/w6";
 
-const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5];
+const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5, world6];
 import type { Step } from "./schema";
 
 const VARS = { deployPassword: "test-pass-1" };
@@ -153,9 +154,9 @@ describe("incidents", () => {
       let state = { world, shells: shellsFor(inc.start) };
       expect(goalsMet(inc.goals, goalCtx(state, [])).every(Boolean), "already fixed").toBe(false);
       if (inc.console) state = { ...state, shells: newWindow(state.shells, CONSOLE_FRAME) };
-      const ran = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
-      const log = ran.log;
-      const fixed = inc.fixMap ? { ...ran.state, world: applyMapActions(ran.state.world, inc.fixMap) } : ran.state;
+      // Dashboard changes first (DNS, firewall), then the commands.
+      if (inc.fixMap) state = { ...state, world: applyMapActions(state.world, inc.fixMap) };
+      const { state: fixed, log } = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
       expect(goalsMet(inc.goals, goalCtx(fixed, log)).every(Boolean), log.map((e) => e.out).join("\n")).toBe(true);
       if (inc.url) expect(traceHttp(fixed.world, inc.url).ok).toBe(true);
     });

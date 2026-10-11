@@ -81,13 +81,13 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
     const target = incident.console ? usePlay.getState().state.shells.findIndex((s) => s.frames[0].via === "console") : idx;
     usePlay.getState().setActive(target);
     const v = defaultVars(vars);
+    if (incident.fixMap) {
+      usePlay.getState().setWorld(applyMapActions(usePlay.getState().state.world, incident.fixMap));
+      await new Promise((r) => setTimeout(r, 700));
+    }
     for (const raw of incident.fix) {
       await new Promise((r) => setTimeout(r, 700));
       usePlay.getState().run(raw.replace(/\{\{(\w+)\}\}/g, (_, k) => v[k] ?? ""));
-    }
-    if (incident.fixMap) {
-      await new Promise((r) => setTimeout(r, 700));
-      usePlay.getState().setWorld(applyMapActions(usePlay.getState().state.world, incident.fixMap));
     }
     usePlay.getState().setBusy(false);
   }

@@ -58,4 +58,9 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "compose", re: /\bcompose\b/i },
   { term: "healthcheck", re: /\bhealth ?checks?\b/i },
   { term: "restart policy", re: /\brestart polic(y|ies)\b/i },
+  // World 6 ("certificate" is not here: World 0 already uses it as an everyday word)
+  { term: "reverse proxy", re: /\breverse prox(y|ies)\b/i },
+  { term: "Let's Encrypt", re: /Let's Encrypt/ },
+  { term: "Caddyfile", re: /\bCaddyfile\b/ },
+  { term: "site block", re: /\bsite blocks?\b/i },
 ];

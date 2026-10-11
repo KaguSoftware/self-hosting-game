@@ -10,6 +10,8 @@ import { TEXT_COMMANDS } from "./commands/text";
 import { UFW_COMMANDS } from "./commands/ufw";
 import { USER_COMMANDS } from "./commands/users";
 import type { Command } from "./ctx";
+// Registers Caddy's boot, caddy reload and certificate behaviour with the Docker sim.
+import "../docker/caddy";
 
 const GROUPS: [string, Command[]][] = [
   ["Files", FILE_COMMANDS],

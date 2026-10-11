@@ -128,6 +128,8 @@ export interface Container {
   imageId?: string;
   /** Compose depends_on, kept for ordering on down and restart. */
   dependsOn?: string[];
+  /** Caddy: the Caddyfile text it loaded at start or last good reload. Editing the file changes nothing until then. */
+  caddyConfig?: string;
 }
 
 export interface DockerState {
@@ -190,6 +192,15 @@ export interface CertState {
   domain: string;
   issuer: string;
   issuedAt: number;
+  /** Where Caddy keeps it: "volume:NAME" survives a recreate, "container:ID" does not. */
+  store?: string;
+}
+
+export interface AcmeState {
+  /** Times a certificate was issued per domain (Let's Encrypt allows 5 per week for the same names). */
+  issued: Record<string, number[]>;
+  /** Last attempt per domain, so failures retry once a minute instead of every second. */
+  lastTry: Record<string, number>;
 }
 
 export interface World {
@@ -202,6 +213,7 @@ export interface World {
   flags: Record<string, string | number | boolean>;
   /** Extra images in remote registries (pushed by CI, or placed by a level). */
   registry?: Record<string, RegistryImage>;
+  acme?: AcmeState;
 }
 
 // ---------- docker ----------

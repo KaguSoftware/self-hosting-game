@@ -91,7 +91,9 @@ export function resolveInDocker(host: Host, from: Container, name: string): Cont
   );
 }
 
+/** What Caddy is running with: the config it loaded, not whatever the file says now. */
 function caddyConfig(host: Host, c: Container): string {
+  if (c.caddyConfig !== undefined) return c.caddyConfig;
   const bind = c.mounts.find((m) => m.target === "/etc/caddy/Caddyfile" && m.type === "bind");
   return (bind && readText(host, bind.source)) ?? "";
 }

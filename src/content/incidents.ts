@@ -212,6 +212,126 @@ INCIDENTS.push(
   },
 );
 
+// ---------- World 6 ----------
+const HTTPS = "https://crumb.shop";
+const reloadCaddy = (w: Parameters<Incident["breakIt"]>[0]) =>
+  runDetached(w, DEPLOY_SHOP, "docker compose exec -w /etc/caddy caddy caddy reload");
+
+INCIDENTS.push(
+  {
+    id: "caddy-typo",
+    title: "Your connection is not private",
+    client: {
+      name: "Riya, who runs the shop",
+      message: "Customers get a scary browser error on crumb.shop! Sam says he only 'cleaned up the Caddyfile' and reloaded it.",
+    },
+    after: "w6-05",
+    start: "vps-deploy",
+    breakIt: (w) => {
+      const f = getFile(w.hosts.vps, "/srv/crumb/Caddyfile");
+      if (f) f.content = f.content.replace("crumb.shop, www", "crumb.shp, www");
+      reloadCaddy(w);
+    },
+    goals: [{ describe: "https://crumb.shop answers again", check: P.traceOk(HTTPS) }],
+    hints: [
+      "curl -I https://crumb.shop gives a TLS error: Caddy has no site for that name. Read the Caddyfile closely.",
+      "The first name is misspelled. sed -i 's/crumb.shp/crumb.shop/' Caddyfile, then reload Caddy with -w /etc/caddy.",
+    ],
+    fastestPath: [
+      "curl -I https://crumb.shop   → tlsv1 alert internal error",
+      "cat /srv/crumb/Caddyfile   → crumb.shp, www.crumb.shop {",
+      "sed -i 's/crumb.shp/crumb.shop/' Caddyfile",
+      "docker compose exec -w /etc/caddy caddy caddy reload",
+    ],
+    fix: ["cd /srv/crumb", "sed -i 's/crumb.shp/crumb.shop/' Caddyfile", "docker compose exec -w /etc/caddy caddy caddy reload"],
+    debrief: [
+      "No site block for a name means no certificate for it, so browsers refuse.",
+      "A typo in a name is still valid Caddyfile, so reload does not complain.",
+      "Read the file you changed first.",
+    ],
+    timeLimit: 300,
+    url: HTTPS,
+  },
+  {
+    id: "cert-new-domain",
+    title: "The new address is not secure",
+    client: {
+      name: "Riya, who runs the shop",
+      message: "We added shop.crumb.shop for the new storefront. Sam put it in the Caddyfile and reloaded, but browsers say the connection is not secure!",
+    },
+    after: "w6-05",
+    start: "vps-deploy",
+    breakIt: (w) => {
+      const f = getFile(w.hosts.vps, "/srv/crumb/Caddyfile");
+      if (f) f.content += "\nshop.crumb.shop {\n\treverse_proxy app:3000\n}\n";
+      reloadCaddy(w);
+      advance(w, w.clock + 10);
+    },
+    goals: [
+      { describe: "shop.crumb.shop has a certificate", check: P.certIssued("shop.crumb.shop") },
+      { describe: "https://shop.crumb.shop answers", check: P.traceOk("https://shop.crumb.shop") },
+    ],
+    hints: [
+      "docker compose logs caddy shows why there is no certificate. Then ask DNS about the new name with dig.",
+      "There is no DNS record for shop.crumb.shop. Add one in the dashboard, then reload Caddy so it tries again.",
+    ],
+    fastestPath: [
+      "docker compose logs --tail 5 caddy   → NXDOMAIN looking up A for shop.crumb.shop",
+      "dig shop.crumb.shop +short   → nothing",
+      "DNS panel: shop CNAME crumb.shop",
+      "docker compose exec -w /etc/caddy caddy caddy reload   → certificate obtained successfully",
+    ],
+    fix: ["cd /srv/crumb", "docker compose exec -w /etc/caddy caddy caddy reload", "docker compose logs --tail 5 caddy"],
+    fixMap: [{ type: "dnsCname", name: "shop.crumb.shop", value: DOMAIN }],
+    controls: [
+      { node: "dns", label: "shop CNAME crumb.shop", on: { type: "dnsCname", name: "shop.crumb.shop", value: DOMAIN }, off: { type: "dnsCname", name: "shop.crumb.shop", value: null } },
+      { node: "dns", label: `shop A ${WRONG_IP}`, on: { type: "dnsA", name: "shop.crumb.shop", value: WRONG_IP }, off: { type: "dnsA", name: "shop.crumb.shop", value: null } },
+    ],
+    debrief: [
+      "A site block alone is not enough. DNS must point the new name at your server first.",
+      "Caddy's log says exactly which light is red: NXDOMAIN means no DNS record.",
+      "After fixing DNS, a reload makes Caddy try again right away.",
+    ],
+    timeLimit: 360,
+    url: "https://shop.crumb.shop",
+  },
+  {
+    id: "app-127",
+    title: "502 after a rebuild",
+    client: {
+      name: "Sam, your teammate",
+      message: "I copied a 'safer' Dockerfile from a blog and rebuilt the app. It says Ready in the logs, but the shop gives 502!",
+    },
+    after: "w6-05",
+    start: "vps-deploy",
+    breakIt: (w) => {
+      const f = getFile(w.hosts.vps, "/srv/crumb/app/Dockerfile");
+      if (f) f.content = f.content.replace("ENV HOSTNAME=0.0.0.0", "ENV HOSTNAME=127.0.0.1");
+      runDetached(w, DEPLOY_SHOP, "docker compose up -d --build");
+      advance(w, w.clock + 10);
+    },
+    goals: [{ describe: "https://crumb.shop answers again", check: P.traceOk(HTTPS) }],
+    hints: [
+      "The app runs, so Caddy cannot reach it. Where does it listen? docker compose logs app shows the address.",
+      "HOSTNAME=127.0.0.1 means only the app's own container can reach it. Set it back to 0.0.0.0 in app/Dockerfile and rebuild.",
+    ],
+    fastestPath: [
+      "curl -I https://crumb.shop   → 502",
+      "docker compose logs app   → Network: http://127.0.0.1:3000",
+      "sed -i 's/HOSTNAME=127.0.0.1/HOSTNAME=0.0.0.0/' app/Dockerfile",
+      "docker compose up -d --build",
+    ],
+    fix: ["cd /srv/crumb", "sed -i 's/HOSTNAME=127.0.0.1/HOSTNAME=0.0.0.0/' app/Dockerfile", "docker compose up -d --build"],
+    debrief: [
+      "Inside a container, 127.0.0.1 means only that container.",
+      "Caddy is another container, so the app must listen on 0.0.0.0.",
+      "Ready in the logs does not mean reachable. 502 means Caddy could not get through.",
+    ],
+    timeLimit: 300,
+    url: HTTPS,
+  },
+);
+
 export function incidentById(id: string): Incident | undefined {
   return INCIDENTS.find((i) => i.id === id);
 }

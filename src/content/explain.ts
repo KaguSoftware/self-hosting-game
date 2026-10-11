@@ -115,6 +115,12 @@ const SUB: Record<string, Record<string, string>> = {
   },
 };
 SUB["apt-get"] = SUB.apt;
+SUB.caddy = {
+  reload: "load the Caddyfile again without stopping. Visitors notice nothing",
+  validate: "check the Caddyfile for mistakes without loading it",
+  version: "print Caddy's version",
+  fmt: "print the Caddyfile neatly formatted",
+};
 SUB.ip = {
   a: "short for address: show each network card and its addresses",
   addr: "show each network card and its addresses",
@@ -275,6 +281,11 @@ const FOLDERS: [RegExp, string][] = [
   [/^~\/\.ssh$/, "your hidden SSH folder inside your home (~ = home, the dot hides it)"],
   [/^~/, "~ means your home folder"],
   [/^\/tmp\b/, "/tmp is for temporary files"],
+  [/(^|\/)Caddyfile$/, "Caddy's settings file"],
+  [/(^|\/)\.env$/, "the app's secrets file (the dot hides it)"],
+  [/(^|\/)compose\.ya?ml$/, "the compose file: every service of the shop"],
+  [/(^|\/)Dockerfile$/, "the recipe for the app's image"],
+  [/\.sh$/, "a script: a file of commands to run in order"],
 ];
 
 function pathMeaning(p: string): string {
@@ -376,7 +387,7 @@ function argMeaning(cmd: string, sub: string | undefined, a: string, prev: strin
   if (cmd === "echo") return "the text to print";
   if (cmd === "sleep" && /^\d+[smh]?$/.test(a)) return `how long to wait: ${a}`;
   if (/^[~/.]/.test(a) || a.includes("/") || /\.\w+$/.test(a)) return pathMeaning(a);
-  if (["ls", "cd", "cat", "rm", "mkdir", "touch", "nano", "less", "head", "tail", "cp", "mv"].includes(cmd) && /^[\w.-]+$/.test(a)) return pathMeaning(a);
+  if (["ls", "cd", "cat", "rm", "mkdir", "touch", "nano", "less", "head", "tail", "cp", "mv", "sed", "grep", "sh", "bash"].includes(cmd) && /^[\w.-]+$/.test(a)) return pathMeaning(a);
   void prev;
   return "";
 }

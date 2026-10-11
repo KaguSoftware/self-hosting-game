@@ -50,14 +50,13 @@ export function parseCaddyfile(text: string): CaddyParse {
       }
       return;
     }
-    if (line.endsWith("{")) {
-      depth++;
-    }
-    if (globalBlock || !current || depth > 1) {
-      return;
-    }
+    // Read the directive before counting its { so "reverse_proxy app:3000 {" keeps its upstream.
+    const opens = line.endsWith("{");
+    const inner = globalBlock || !current || depth > 1;
+    if (opens) depth++;
+    if (inner) return;
     const [directive, ...args] = line.split(/\s+/);
-    const site: CaddySite = current;
+    const site: CaddySite = current!;
     if (directive === "reverse_proxy") site.upstreams.push(...args.filter((a) => a !== "{"));
     else if (directive === "tls") site.tls = args[0];
     else if (directive === "respond") site.respond = args.join(" ");
