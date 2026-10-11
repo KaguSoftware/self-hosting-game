@@ -166,6 +166,8 @@ export interface Step {
    * - known: something a Next.js + Vercel + Supabase developer already knows.
    */
   basis?: Basis;
+  /** Something worth keeping, offered as a copy button after the step (a checklist). */
+  copy?: { label: string; text: string };
   /** Jargon this step explains (in its intel, after or why), for the jargon check. */
   teaches?: string[];
   tags: string[];

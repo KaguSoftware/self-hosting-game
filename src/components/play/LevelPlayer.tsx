@@ -364,6 +364,20 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                 </div>
               </div>
               {result.why && <p className="mt-4 text-[15px] leading-relaxed text-ink/90">{result.why}</p>}
+              {step.copy && (
+                <Btn
+                  kind="ghost"
+                  className="mt-3 w-full"
+                  onClick={() =>
+                    navigator.clipboard?.writeText(step.copy!.text).then(
+                      () => useUi.getState().toast("Copied. Paste it into a message or a note.", "info"),
+                      () => useUi.getState().toast("Could not copy. Your browser blocked the clipboard.", "warn"),
+                    )
+                  }
+                >
+                  {step.copy.label}
+                </Btn>
+              )}
               <Btn kind={verdict === "bad" || verdict === "help" || verdict === "learn" ? "primary" : "teal"} onClick={next} className="mt-5 w-full" autoFocus>
                 {stepIdx + 1 < level.steps.length ? "Continue" : "Finish level"}
                 <KeyHint>↵</KeyHint>
