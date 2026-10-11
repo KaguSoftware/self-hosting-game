@@ -203,6 +203,10 @@ export interface Incident {
   url?: string;
   /** Or trace an SSH login as this user once fixed. */
   sshUser?: string;
+  /** Dashboard switches the player can use (DNS panel, provider firewall). */
+  controls?: MapControl[];
+  /** Dashboard part of the fix, applied after `fix` for show me and tests. */
+  fixMap?: MapAction[];
 }
 
 export interface Term {

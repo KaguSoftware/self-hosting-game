@@ -139,7 +139,8 @@ export type MapAction =
   | { type: "container"; name: string; running: boolean }
   | { type: "pfwRule"; port: number; on: boolean }
   | { type: "pfw"; enabled: boolean }
-  | { type: "dnsA"; name: string; value: string | null }
+  | { type: "dnsA"; name: string; value: string | null; ttl?: number }
+  | { type: "dnsCname"; name: string; value: string | null; ttl?: number }
   | { type: "ufw"; enabled: boolean }
   | { type: "ufwRule"; port: number; on: boolean }
   | { type: "service"; name: string; running: boolean }
@@ -167,7 +168,13 @@ export function applyMapAction(w: World, a: MapAction): World {
         break;
       case "dnsA": {
         d.dns = d.dns.filter((r) => !(r.name === a.name && r.type === "A"));
-        if (a.value) d.dns.push({ name: a.name, type: "A", value: a.value, ttl: 300 });
+        if (a.value) d.dns.push({ name: a.name, type: "A", value: a.value, ttl: a.ttl ?? 300 });
+        break;
+      }
+      case "dnsCname": {
+        // A name with a CNAME cannot have other records, like real DNS.
+        d.dns = d.dns.filter((r) => r.name !== a.name || (a.value === null && r.type !== "CNAME"));
+        if (a.value) d.dns.push({ name: a.name, type: "CNAME", value: a.value, ttl: a.ttl ?? 300 });
         break;
       }
       case "ufw":
@@ -217,6 +224,10 @@ export function isActionActive(w: World, a: MapAction): boolean {
       return w.provider.firewall.enabled === a.enabled;
     case "dnsA": {
       const r = w.dns.find((x) => x.name === a.name && x.type === "A");
+      return a.value === null ? !r : r?.value === a.value;
+    }
+    case "dnsCname": {
+      const r = w.dns.find((x) => x.name === a.name && x.type === "CNAME");
       return a.value === null ? !r : r?.value === a.value;
     }
     case "ufw":

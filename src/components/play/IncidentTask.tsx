@@ -7,6 +7,7 @@ import { replay } from "@/content";
 import { CONSOLE_FRAME, goalCtx, goalsMet } from "@/engine/play";
 import { defaultVars, shellsFor } from "@/engine/replay";
 import { incidentScore } from "@/engine/rules";
+import { applyMapAction, applyMapActions, isActionActive } from "@/sim/map";
 import { traceHttp } from "@/sim/net";
 import { sshCheck } from "@/sim/sshAuth";
 import { usePlay } from "@/store/play";
@@ -84,6 +85,10 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
       await new Promise((r) => setTimeout(r, 700));
       usePlay.getState().run(raw.replace(/\{\{(\w+)\}\}/g, (_, k) => v[k] ?? ""));
     }
+    if (incident.fixMap) {
+      await new Promise((r) => setTimeout(r, 700));
+      usePlay.getState().setWorld(applyMapActions(usePlay.getState().state.world, incident.fixMap));
+    }
     usePlay.getState().setBusy(false);
   }
 
@@ -146,6 +151,34 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
           <GoalList goals={incident.goals} met={met} />
         </div>
       </div>
+
+      {incident.controls && (
+        <div className="rounded-xl border border-line2 bg-panel p-3">
+          <div className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted">Provider dashboard</div>
+          <div className="flex flex-wrap gap-1.5">
+            {incident.controls.map((c) => {
+              const on = isActionActive(state.world, c.on);
+              return (
+                <button
+                  key={`${c.node}-${c.label}`}
+                  type="button"
+                  disabled={phase !== "live" || busy}
+                  aria-pressed={on}
+                  onClick={() => {
+                    sfx.tap();
+                    usePlay.getState().setWorld(applyMapAction(state.world, on ? c.off : c.on));
+                  }}
+                  className={`rounded-md border px-2.5 py-1 font-mono text-[12px] transition disabled:opacity-50 ${
+                    on ? "border-ink bg-ink text-bg" : "border-line2 bg-panel2 text-ink hover:border-ink"
+                  }`}
+                >
+                  {c.label}: {on ? "on" : "off"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <Terminal
         stepId={`incident:${incident.id}`}

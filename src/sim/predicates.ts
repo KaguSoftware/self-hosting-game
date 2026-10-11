@@ -1,6 +1,6 @@
 // Goal predicates. Levels check the resulting STATE, never exact commands.
 import { getDir, getFile, userGroups } from "./fs";
-import { providerAllows, traceHttp, ufwAllows as ufwAllowsPort } from "./net";
+import { providerAllows, resolveName, traceHttp, ufwAllows as ufwAllowsPort } from "./net";
 import { sshCheck } from "./sshAuth";
 import { runningSshd } from "./sshd";
 import type { HopId, HostId, Shell, World } from "./types";
@@ -175,6 +175,46 @@ export const traceFailsAt =
   (url: string, hop: HopId): Check =>
   (g) =>
     traceHttp(g.world, url).failedAt === hop;
+
+/** DNS answers `name` with `ip` (following CNAMEs). */
+export const dnsResolves =
+  (name: string, ip: string): Check =>
+  (g) =>
+    resolveName(g.world, name).ip === ip;
+
+/** A record of this exact type and value exists. */
+export const dnsHas =
+  (name: string, type: "A" | "CNAME", value: string): Check =>
+  (g) =>
+    g.world.dns.some((r) => r.name === name && r.type === type && r.value.replace(/\.$/, "") === value);
+
+export const pfwEnabled: Check = (g) => g.world.provider.firewall.enabled;
+
+/** The provider firewall is on and allows exactly these ports. */
+export const providerOnly =
+  (ports: number[]): Check =>
+  (g) => {
+    const fw = g.world.provider.firewall;
+    const open = [...new Set(fw.rules.map((r) => r.port))].sort((a, b) => a - b);
+    return fw.enabled && open.join(",") === [...ports].sort((a, b) => a - b).join(",");
+  };
+
+/** ufw is on and allows exactly these ports. */
+export const ufwOnly =
+  (ports: number[]): Check =>
+  (g) => {
+    const u = g.world.hosts.vps.ufw;
+    const open = [...new Set(u.rules.filter((r) => r.action !== "deny").map((r) => r.port))].sort((a, b) => a - b);
+    return u.enabled && open.join(",") === [...ports].sort((a, b) => a - b).join(",");
+  };
+
+/** Someone on the internet can open a TCP connection to this port on the VPS. */
+export const internetReaches =
+  (port: number): Check =>
+  (g) => {
+    const t = traceHttp(g.world, `http://${g.world.hosts.vps.publicIp}:${port}`);
+    return !["provider-fw", "ufw", "listener", "dns"].includes(t.failedAt ?? "");
+  };
 
 export const flag =
   (name: string, value: string | number | boolean = true): Check =>

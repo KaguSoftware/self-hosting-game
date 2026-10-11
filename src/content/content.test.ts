@@ -151,7 +151,9 @@ describe("incidents", () => {
       let state = { world, shells: shellsFor(inc.start) };
       expect(goalsMet(inc.goals, goalCtx(state, [])).every(Boolean), "already fixed").toBe(false);
       if (inc.console) state = { ...state, shells: newWindow(state.shells, CONSOLE_FRAME) };
-      const { state: fixed, log } = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
+      const ran = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
+      const log = ran.log;
+      const fixed = inc.fixMap ? { ...ran.state, world: applyMapActions(ran.state.world, inc.fixMap) } : ran.state;
       expect(goalsMet(inc.goals, goalCtx(fixed, log)).every(Boolean), log.map((e) => e.out).join("\n")).toBe(true);
       if (inc.url) expect(traceHttp(fixed.world, inc.url).ok).toBe(true);
     });
