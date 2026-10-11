@@ -181,6 +181,28 @@ export default function Home() {
           </section>
         ))}
 
+        <section className="mt-8">
+          {completed["w12-01"] ? (
+            <Link href="/oncall" className="flex items-center gap-3 rounded-xl border border-red/50 bg-reddim/10 px-4 py-3 transition hover:border-red">
+              <div className="font-display text-4xl leading-none text-red">!</div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display text-2xl leading-none text-ink">On-call</div>
+                <div className="truncate text-[12.5px] text-muted">Endless pages on your finished server. How long can you keep it up?</div>
+              </div>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-red">play</span>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3 opacity-55">
+              <div className="font-display text-4xl leading-none text-faint">!</div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display text-2xl leading-none text-muted">On-call</div>
+                <div className="truncate text-[12.5px] text-faint">Unlocks after the final mission</div>
+              </div>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-faint">locked</span>
+            </div>
+          )}
+        </section>
+
         <footer className="mt-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-6 text-[13px] text-muted">
           <span className="text-[15px] text-ink">
             <Logo size={20} />

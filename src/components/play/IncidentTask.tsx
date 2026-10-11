@@ -53,7 +53,7 @@ export default function IncidentTask({
   const started = useRef(0);
 
   useEffect(() => {
-    usePlay.getState().load(incidentStartState(incident, vars, after), vars, "Pager went off. You are on your laptop.");
+    usePlay.getState().load(incidentStartState(incident, vars, after), vars, incident.start === "laptop" ? "Pager went off. You are on your laptop." : "Pager went off. You are logged in to web-1 as deploy.");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incident.id, after]);
 
