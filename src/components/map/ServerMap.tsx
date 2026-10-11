@@ -104,6 +104,23 @@ function layout(nodes: MapNode[], vertical: boolean): Record<string, Pt> {
   return out;
 }
 
+/** Plain-English job of each box, for people new to all this. */
+const ROLE: Record<MapNode["kind"], string> = {
+  client: "someone's browser",
+  laptop: "where you type",
+  dns: "address book",
+  pfw: "front gate",
+  vps: "the server",
+  ufw: "door lock",
+  sshd: "how you log in",
+  caddy: "front desk",
+  app: "your Next.js code",
+  db: "your data",
+  svc: "a program",
+  volume: "saved files",
+  gitlab: "your code repo",
+};
+
 const statusClass: Record<MapNode["status"], string> = {
   ok: "border-amber/70 bg-panel2 text-ink",
   off: "border-dashed border-line2 bg-panel/70 text-muted",
@@ -266,7 +283,10 @@ export default function ServerMap(props: ServerMapProps) {
                       </span>
                       <span className="truncate font-mono text-[11px] font-semibold">{n.label}</span>
                     </div>
-                    <div className="mt-0.5 line-clamp-2 whitespace-pre-line font-mono text-[9.5px] leading-tight text-muted">{n.sub}</div>
+                    <div className="mt-0.5 truncate text-[10.5px] italic leading-tight text-ink/70">{ROLE[n.kind]}</div>
+                    <div className="mt-0.5 line-clamp-1 whitespace-pre-line font-mono text-[9px] leading-tight text-faint" title={n.sub}>
+                      {n.sub}
+                    </div>
                     {tags?.[n.id]?.length ? (
                       <div className="mt-1 flex flex-wrap gap-0.5">
                         {tags[n.id].map((tg) => (

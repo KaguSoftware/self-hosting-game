@@ -55,6 +55,8 @@ export type Task =
       console?: boolean;
       /** URL to trace on the map when a goal is met. */
       url?: string;
+      /** Beginner help: the exact command(s) to type, shown with a tap-to-type button. */
+      guide?: string[];
     }
   | { kind: "map"; mode: "route"; prompt: string; path: string[]; hints: [string, string] }
   | { kind: "map"; mode: "match"; prompt: string; pairs: { chip: string; node: string }[]; hints: [string, string] }
@@ -116,6 +118,8 @@ export interface Step {
   task: Task;
   /** Quick quiz used by spaced review when this step was missed. */
   review?: QuizItem;
+  /** One plain line shown after success: what just happened. */
+  after?: string;
   tags: string[];
 }
 

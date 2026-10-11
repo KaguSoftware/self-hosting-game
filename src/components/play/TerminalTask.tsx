@@ -17,6 +17,7 @@ export default function TerminalTask({
   stepStart,
   done,
   allowConsole,
+  beginner,
 }: {
   step: Step;
   task: T;
@@ -24,6 +25,7 @@ export default function TerminalTask({
   stepStart: () => PlayState;
   done: boolean;
   allowConsole?: boolean;
+  beginner?: boolean;
 }) {
   const { state, log, tick, busy } = usePlay();
   const [failures, setFailures] = useState(0);
@@ -81,6 +83,24 @@ export default function TerminalTask({
         <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.25em] text-muted">Goal</div>
         <GoalList goals={task.goals} met={met} />
       </div>
+      {task.guide && !done && (
+        <div className="rounded-lg border border-line2 bg-panel2/60 px-3 py-2">
+          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-muted">Type this, then press Enter</div>
+          <div className="flex flex-wrap gap-2">
+            {task.guide.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => usePlay.getState().typeIn(g)}
+                className="rounded-md border border-ink/40 bg-bg px-2.5 py-1 font-mono text-[14px] text-ink hover:border-ink"
+                title="Tap to type it in"
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <Terminal
         chips={task.chips}
         allowConsole={allowConsole || task.console}
@@ -102,6 +122,7 @@ export default function TerminalTask({
       {!done && (
         <HintBar
           hints={task.hints}
+          threshold={beginner ? 1 : 2}
           failures={failures}
           onHint={() => setUsedHints(true)}
           onShowMe={() => void showMe()}

@@ -86,7 +86,7 @@ export default function ProfilePage() {
               return (
                 <div key={w.id} className="grid grid-cols-[1fr_2fr_3rem] items-center gap-3 font-mono text-[12px]">
                   <span className="truncate text-ink/85">
-                    {w.id}. {w.title}
+                    {w.title}
                   </span>
                   <div className="h-2 overflow-hidden rounded-full bg-line">
                     <div className={`h-full ${pct === null ? "" : pct >= 80 ? "bg-teal" : pct >= 50 ? "bg-amber" : "bg-red"}`} style={{ width: `${pct ?? 0}%` }} />

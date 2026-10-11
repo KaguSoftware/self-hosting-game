@@ -1,12 +1,13 @@
 import { makeReplay } from "@/engine/replay";
 import { INCIDENTS } from "./incidents";
 import type { Level, QuizItem, Step, WorldDef } from "./schema";
+import { worldStart } from "./worlds/start";
 import { world0 } from "./worlds/w0";
 import { world1 } from "./worlds/w1";
 import { world2 } from "./worlds/w2";
 import { world3 } from "./worlds/w3";
 
-export const WORLDS: WorldDef[] = [world0, world1, world2, world3];
+export const WORLDS: WorldDef[] = [worldStart, world0, world1, world2, world3];
 
 /** Worlds still being built. Shown locked on the path. */
 export const UPCOMING: { id: number; title: string; tagline: string }[] = [
@@ -24,6 +25,11 @@ export const UPCOMING: { id: number; title: string; tagline: string }[] = [
 export const LEVELS: Level[] = WORLDS.flatMap((w) => w.levels);
 
 export const replay = makeReplay({ levels: LEVELS });
+
+/** "Start" for the intro world, "World N" otherwise. */
+export function worldLabel(id: number): string {
+  return id < 0 ? "Start" : `World ${id}`;
+}
 
 export function levelById(id: string): Level | undefined {
   return LEVELS.find((l) => l.id === id);

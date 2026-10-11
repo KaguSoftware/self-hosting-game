@@ -27,7 +27,7 @@ export const world0: WorldDef = {
           id: "w0-01-a",
           mission: "This is where you are headed. Tag what Vercel and Supabase used to do for you.",
           intel: {
-            lines: ["On Vercel you pushed code. A whole machine room did the rest.", "Each box here is a job someone else used to do."],
+            lines: ["On Vercel you pushed code. Their computers did all of this for you.", "Each box is one job you now do yourself. The italic text says what it is."],
             terms: ["dns", "reverse-proxy"],
           },
           task: {
@@ -61,7 +61,7 @@ export const world0: WorldDef = {
             question: "Which box on your server does the visitor's browser actually connect to?",
             options: ["Caddy", "The Next.js app", "Postgres"],
             answer: 0,
-            why: "Only Caddy listens on ports 80 and 443. The app and database hide behind it.",
+            why: "Caddy is the front desk. It is the only box visitors talk to. The app and database stay hidden behind it.",
           },
           tags: ["big-picture", "proxy"],
         },
@@ -77,14 +77,14 @@ export const world0: WorldDef = {
           id: "w0-02-a",
           mission: "A visitor opens crumb.shop. Walk the request to the data.",
           intel: {
-            lines: ["A request is a letter. Each box reads the address and passes it on.", "If one box drops it, everything after it goes dark."],
+            lines: ["A request is like a letter. Each box reads it and passes it on.", "If one box drops it, it never reaches the end."],
           },
           task: {
             kind: "map",
             mode: "route",
             prompt: "Tap the boxes in the order the request travels.",
             path: ["client", "dns", "pfw", "ufw", "caddy", "app", "db"],
-            hints: ["Start at the visitor. Before anything else, the browser needs an IP address.", "Two firewalls come next: the provider's, then the server's own (ufw)."],
+            hints: ["Start at the visitor. First the browser needs the server's number, from the address book (DNS).", "Then two gates: the front gate (provider firewall), then the door lock (ufw). Then the front desk."],
           },
           review: {
             id: "w0-02-a-q",
@@ -104,7 +104,7 @@ export const world0: WorldDef = {
             question: "The browser asks DNS about crumb.shop. What comes back?",
             options: ["The website's files", "An IP address, like 203.0.113.10", "A password"],
             answer: 1,
-            why: "DNS is a phone book. Name in, number (IP) out. Nothing else.",
+            why: "DNS is an address book. Name in, number out. That number is called an IP address.",
           },
           tags: ["dns"],
         },
@@ -133,7 +133,7 @@ export const world0: WorldDef = {
         {
           id: "w0-03-c",
           mission: "Break it yourself. Make Caddy answer with 502 Bad Gateway.",
-          intel: { lines: ["502 means Caddy is fine, but nothing answered behind it."] },
+          intel: { lines: ["502 is an error number. It means: the front desk (Caddy) works, but nobody answered behind it."] },
           task: {
             kind: "map",
             mode: "toggle",
@@ -159,13 +159,13 @@ export const world0: WorldDef = {
         },
         {
           id: "w0-03-b",
-          mission: "Now the provider firewall stops allowing port 443.",
+          mission: "Now the front gate (provider firewall) stops letting web visitors in.",
           task: {
             kind: "predict",
             question: "What does the visitor see?",
             options: ["The page loads slowly", "It spins, then times out", "A 502 error"],
             answer: 1,
-            why: "Firewalls drop packets silently. The browser waits, then gives up.",
+            why: "A firewall ignores blocked visitors. No answer at all, so the browser waits, then gives up.",
             playout: { actions: [{ type: "pfwRule", port: 443, on: false }], url: URL },
           },
           tags: ["firewall", "debugging"],
@@ -178,7 +178,7 @@ export const world0: WorldDef = {
             question: "What does the visitor get?",
             options: ["A 500 error from the app", "A 502 from Caddy", "A DNS error"],
             answer: 0,
-            why: "Caddy reached the app, so no 502. The app could not reach its data, so it errors with 500.",
+            why: "The front desk reached the app, so no 502. But the app could not get its data, so it shows error 500.",
             playout: { actions: [{ type: "container", name: "crumb-app-1", running: true }, { type: "container", name: "crumb-db-1", running: false }], url: URL },
           },
           tags: ["debugging", "postgres"],
@@ -196,13 +196,14 @@ export const world0: WorldDef = {
           id: "w0-04-a",
           mission: "Ask crumb.shop for its headers from your laptop.",
           intel: {
-            lines: ["curl is a browser without the screen.", "curl -I asks for headers only. The first line is the status."],
+            lines: ["curl fetches a web page from the terminal.", "-I asks only for the short summary. Its first line has a number: 200 means OK."],
             terms: ["curl", "status-code"],
           },
           task: {
             kind: "terminal",
             goals: [{ describe: "See HTTP/2 200 from crumb.shop", check: P.saw(/HTTP\/2 200/) }],
             hints: ["Type curl, then -I, then the full address with https://", "curl -I https://crumb.shop"],
+            guide: ["curl -I https://crumb.shop"],
             showMe: ["curl -I https://crumb.shop"],
             chips: ["curl", "-I", "https://crumb.shop"],
             url: URL,
@@ -215,6 +216,7 @@ export const world0: WorldDef = {
             why: "-I means HEAD: just the status line and headers.",
             tag: "curl",
           },
+          after: "HTTP/2 200 means: it worked. The other lines are extra details the server sends along.",
           tags: ["curl"],
         },
         {
@@ -241,6 +243,7 @@ export const world0: WorldDef = {
             chips: ["curl -I https://crumb.shop"],
             url: URL,
           },
+          after: "502: the front desk is up, but the app behind it is not.",
           tags: ["curl"],
         },
         {
@@ -328,8 +331,8 @@ export const world0: WorldDef = {
             items: [
               { id: "w0-r1", q: "DNS turns a name into...", options: ["an IP address", "a certificate", "a container"], answer: 0, why: "Name in, IP out.", tag: "dns" },
               { id: "w0-r2", q: "502 Bad Gateway means...", options: ["DNS is broken", "nothing answered behind the proxy", "the database is full"], answer: 1, why: "The proxy is up, the app is not.", tag: "debugging" },
-              { id: "w0-r3", q: "A firewall blocking a port usually looks like...", options: ["an instant error", "a timeout", "a 404"], answer: 1, why: "Dropped packets mean silence, then timeout.", tag: "firewall" },
-              { id: "w0-r4", q: "Who owns ports 80 and 443 on your server?", options: ["Caddy", "Postgres", "ufw"], answer: 0, why: "One program owns each port. For the web, that is the proxy.", tag: "proxy" },
+              { id: "w0-r3", q: "When a firewall blocks you, it usually looks like...", options: ["an instant error", "waiting, then a timeout", "a 404"], answer: 1, why: "Dropped packets mean silence, then timeout.", tag: "firewall" },
+              { id: "w0-r4", q: "Which box is the front desk that visitors reach?", options: ["Caddy", "Postgres", "ufw"], answer: 0, why: "Caddy greets every visitor and passes them on.", tag: "proxy" },
               { id: "w0-r5", q: "App up, database down. The visitor sees...", options: ["500", "502", "timeout"], answer: 0, why: "The app answers, but with an error.", tag: "debugging" },
               { id: "w0-r6", q: "What replaced Supabase on your server?", options: ["Caddy", "Postgres (plus your own auth and storage)", "DNS"], answer: 1, why: "Supabase is mostly Postgres with extras.", tag: "big-picture" },
               { id: "w0-r7", q: "curl -I shows...", options: ["headers", "the whole page", "the server's disk"], answer: 0, why: "-I is a HEAD request.", tag: "curl" },

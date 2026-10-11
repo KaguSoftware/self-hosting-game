@@ -45,6 +45,13 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
     if (!editor && !disabled) inputRef.current?.focus({ preventScroll: true });
   }, [active, editor, disabled]);
 
+  const insert = usePlay((s) => s.insert);
+  useEffect(() => {
+    if (!insert) return;
+    setInput(insert.text);
+    inputRef.current?.focus();
+  }, [insert]);
+
   if (!sh) return null;
 
   function submit(text: string) {

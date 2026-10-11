@@ -66,10 +66,9 @@ export const world1: WorldDef = {
       steps: [
         {
           id: "w1-02-a",
-          mission: "You run a 16 core, 32 GB machine. Fill it with client VMs.",
+          mission: "You own one big computer: 16 CPUs, 32 GB RAM. Fill it with client VMs.",
           intel: {
-            lines: ["A hypervisor splits one physical machine into many virtual ones (VMs).", "CPU time can be shared. RAM cannot: each GB belongs to one VM."],
-            analogy: "A restaurant: tables (RAM) are reserved, the chef (CPU) cooks for everyone.",
+            lines: ["One big computer can be split into smaller pretend computers, called VMs.", "CPU (the brain) can be shared. RAM (desk space) cannot: each GB belongs to one VM."],
             terms: ["hypervisor", "vm"],
           },
           task: {
@@ -104,7 +103,7 @@ export const world1: WorldDef = {
             question: "What did you really get?",
             options: ["Two physical cores, just for you", "A share of CPU time on a bigger machine", "Two separate servers"],
             answer: 1,
-            why: "vCPU = virtual CPU. You share the real cores with neighbours. Usually fine.",
+            why: "vCPU means virtual CPU: a share of a real CPU's time. Neighbours share it too. Usually fine.",
           },
           tags: ["vps"],
         },
@@ -120,20 +119,20 @@ export const world1: WorldDef = {
           id: "w1-03-a",
           mission: "VM or container? 30 seconds.",
           intel: {
-            lines: ["A VM is a full computer with its own kernel.", "A container is a boxed app that shares the host's kernel. Lighter, faster."],
-            analogy: "VM = a house. Container = a room in your house.",
+            lines: ["A VM is a whole pretend computer with its own operating system.", "A container is a lighter box around just one app. Docker makes containers."],
+            analogy: "VM = a whole house. Container = a room in your house.",
             terms: ["container"],
           },
           task: {
             kind: "rapid",
             seconds: 30,
             items: [
-              { id: "w1-r1", q: "Has its own kernel", options: ["VM", "Container"], answer: 0, why: "A VM boots a whole OS.", tag: "containers" },
+              { id: "w1-r1", q: "Has its own full operating system", options: ["VM", "Container"], answer: 0, why: "A VM starts a whole OS.", tag: "containers" },
               { id: "w1-r2", q: "Starts in under a second", options: ["VM", "Container"], answer: 1, why: "A container is just a process with walls.", tag: "containers" },
               { id: "w1-r3", q: "Your VPS is a...", options: ["VM", "Container"], answer: 0, why: "Providers sell VMs.", tag: "vps" },
               { id: "w1-r4", q: "Docker runs...", options: ["VMs", "Containers"], answer: 1, why: "Docker runs containers inside your VM.", tag: "containers" },
               { id: "w1-r5", q: "Uses the least RAM per app", options: ["VM", "Container"], answer: 1, why: "No extra OS to run.", tag: "containers" },
-              { id: "w1-r6", q: "Can run a different OS kernel than the host", options: ["VM", "Container"], answer: 0, why: "Containers share the host kernel.", tag: "containers" },
+              { id: "w1-r6", q: "Can run a different operating system than the host", options: ["VM", "Container"], answer: 0, why: "Containers share the host's.", tag: "containers" },
             ],
           },
           tags: ["containers"],
@@ -150,7 +149,7 @@ export const world1: WorldDef = {
           id: "w1-04-a",
           mission: "Pick a plan for the client: Next.js + Postgres + Caddy, about 2,000 visitors a day.",
           intel: {
-            lines: ["A VPS is a VM you rent by the month.", "Pick by RAM first. Out of RAM, programs get killed. Slow CPU just means slower."],
+            lines: ["A VPS is a VM you rent by the month. It will be your server.", "Pick by RAM first. Out of RAM, programs crash. A slow CPU just means slower."],
             terms: ["vps"],
           },
           task: {
@@ -197,13 +196,14 @@ export const world1: WorldDef = {
           id: "w1-05-a",
           mission: "Log in to your new server as root.",
           intel: {
-            lines: ["ssh user@address opens a shell on another machine.", "First time, ssh asks if you trust the server. Type yes.", "Root password: Tq7-mango-river"],
+            lines: ["ssh logs you in to another computer: ssh user@address.", "First time, it asks if you trust the server. Type yes.", "Then the password: Tq7-mango-river"],
             terms: ["ssh", "root"],
           },
           task: {
             kind: "terminal",
             goals: [{ describe: "You are logged in to web-1 as root", check: P.loggedInAs("vps", "root") }],
             hints: ["The pattern is ssh root@IP. The IP was in the email.", `ssh root@${IP}, then yes, then the password.`],
+            guide: ["ssh root@203.0.113.10", "yes", "Tq7-mango-river"],
             showMe: [`ssh root@${IP}`, "yes", "Tq7-mango-river"],
             chips: ["ssh", `root@${IP}`, "yes"],
           },
@@ -215,6 +215,7 @@ export const world1: WorldDef = {
             why: "ssh user@address.",
             tag: "ssh",
           },
+          after: "You are now typing ON the server, not your laptop. The prompt says root@web-1.",
           tags: ["ssh"],
         },
         {
@@ -228,6 +229,7 @@ export const world1: WorldDef = {
               { describe: "Show RAM usage", check: P.saw(/Mem:/, "vps") },
             ],
             hints: ["Two short commands: one counts CPUs, one shows memory.", "nproc, then free -h"],
+            guide: ["nproc", "free -h"],
             showMe: ["nproc", "free -h"],
             chips: ["nproc", "free -h", "hostnamectl"],
           },
@@ -239,6 +241,7 @@ export const world1: WorldDef = {
             why: "free = memory. df = disk.",
             tag: "linux-health",
           },
+          after: "2 CPUs. free shows memory (RAM). Gi is about a gigabyte.",
           tags: ["linux-health"],
         },
         {

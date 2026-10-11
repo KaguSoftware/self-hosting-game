@@ -86,15 +86,17 @@ export function HintBar({
   onHint,
   onShowMe,
   showMeLabel = "Show me",
+  threshold = 2,
 }: {
   hints: [string, string];
   failures: number;
+  threshold?: number;
   onHint: () => void;
   onShowMe?: () => void;
   showMeLabel?: string;
 }) {
   const [level, setLevel] = useState(0);
-  const visible = failures >= 2 || level > 0;
+  const visible = failures >= threshold || level > 0;
   return (
     <AnimatePresence>
       {visible && (

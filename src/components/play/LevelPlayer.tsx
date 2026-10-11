@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { incidentById } from "@/content/incidents";
-import { levelById, nextLevel, replay, worldOf, WORLDS } from "@/content";
+import { levelById, nextLevel, replay, worldLabel, worldOf, WORLDS } from "@/content";
 import type { Level } from "@/content/schema";
 import { goalCtx, goalsMet } from "@/engine/play";
 import { comboMultiplier, dueCards, dayKey, LEVEL_BONUS, CLEAN_BONUS, levelFromXp, rankFor, stars as starsFor, STEP_XP } from "@/engine/rules";
@@ -86,7 +86,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         for (const id of r.missed) prog.miss(id);
         setLevelXp((x) => x + xp);
         setFlags((f) => ({ hints: f.hints || r.usedHints, showMe: f.showMe || r.usedShowMe }));
-        setResult({ ...r, xp });
+        setResult({ ...r, xp, why: [step.after, r.why].filter(Boolean).join(" ") || undefined });
         sfx.success();
         useUi.getState().toast(`+${xp} XP`, "xp");
         // Remember the deploy password the player chose, so later levels use it.
@@ -164,7 +164,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
   }
 
   const t = step.task;
-  const showSideMap = !(t.kind === "map" || t.kind === "allocate" || t.kind === "rapid" || t.kind === "match" || t.kind === "order");
+  const showSideMap = level.world >= 0 && !(t.kind === "map" || t.kind === "allocate" || t.kind === "rapid" || t.kind === "match" || t.kind === "order");
   const incident = t.kind === "incident" ? incidentById(t.incidentId) : undefined;
   const done = !!result;
   const pwKnown = level.base === "chain" && play.state.world.hosts.vps.users.deploy?.password;
@@ -173,7 +173,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
     const key = `${level.id}-${stepIdx}`;
     switch (t.kind) {
       case "terminal":
-        return <TerminalTask key={key} step={step} task={t} cb={cb} stepStart={stepStart} done={done} />;
+        return <TerminalTask key={key} step={step} task={t} cb={cb} stepStart={stepStart} done={done} beginner={level.world <= 1} />;
       case "map":
         return <MapTask key={key} step={step} task={t} cb={cb} done={done} />;
       case "predict":
@@ -207,7 +207,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         </Link>
         <div className="min-w-0 flex-1">
           <div className="truncate font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-            World {level.world} · {world?.title}
+            {level.world < 0 ? world?.title : `${worldLabel(level.world)} · ${world?.title}`}
           </div>
           <div className="truncate font-display text-[16px] leading-tight text-ink">{level.title}</div>
         </div>
@@ -311,7 +311,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
               transition={{ type: "spring", stiffness: 260, damping: 20 }}
               className="w-full max-w-md space-y-4 rounded-2xl border border-amber/40 bg-panel p-6 text-center box-glow"
             >
-              <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted">{summary.worldDone ? `World ${level.world} complete` : "Level complete"}</div>
+              <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted">{summary.worldDone ? `${worldLabel(level.world)} complete` : "Level complete"}</div>
               <div className="font-display text-4xl text-amber glow">{level.title}</div>
               <div className="flex justify-center gap-2">
                 {[1, 2, 3].map((i) => (

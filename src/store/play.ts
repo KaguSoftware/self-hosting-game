@@ -34,6 +34,8 @@ export interface PlayStore {
   /** Bumped whenever the world changes so goal checks re-run. */
   tick: number;
   busy: boolean;
+  /** Text the terminal should put in its input (from guide buttons). */
+  insert: { text: string; key: number } | null;
 
   load(state: PlayState, vars: Vars, intro?: string): void;
   setState(state: PlayState, note?: string): void;
@@ -53,6 +55,7 @@ export interface PlayStore {
   bumpCombo(): number;
   breakCombo(): void;
   setBusy(b: boolean): void;
+  typeIn(text: string): void;
 }
 
 export const usePlay = create<PlayStore>((set, get) => ({
@@ -69,6 +72,7 @@ export const usePlay = create<PlayStore>((set, get) => ({
   bestCombo: 0,
   tick: 0,
   busy: false,
+  insert: null,
 
   load(state, vars, intro) {
     set({
@@ -229,5 +233,9 @@ export const usePlay = create<PlayStore>((set, get) => ({
 
   setBusy(b) {
     set({ busy: b });
+  },
+
+  typeIn(text) {
+    set({ insert: { text, key: Date.now() } });
   },
 }));

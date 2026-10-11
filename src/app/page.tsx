@@ -14,7 +14,7 @@ export default function Home() {
   const [sheet, setSheet] = useState<WorldDef | null>(null);
 
   const firstOpen = LEVELS.findIndex((l) => !completed[l.id]);
-  const unlocked = (i: number) => i === 0 || !!completed[LEVELS[i - 1].id];
+  const unlocked = (i: number) => i === 0 || LEVELS[i].id === "w0-01" || !!completed[LEVELS[i].id] || !!completed[LEVELS[i - 1].id];
   const doneCount = Object.keys(completed).length;
 
   return (
@@ -46,7 +46,7 @@ export default function Home() {
           return (
             <section key={w.id} className="mt-10">
               <div className={`sticky top-[52px] z-10 -mx-2 mb-4 flex items-center gap-3 rounded-xl border px-4 py-3 backdrop-blur ${worldOpen ? "border-line bg-panel/90" : "border-line/60 bg-bg2/80 opacity-60"}`}>
-                <div className="font-display text-3xl leading-none text-muted">{String(w.id).padStart(2, "0")}</div>
+                <div className="font-display text-3xl leading-none text-muted">{w.id < 0 ? ">" : String(w.id).padStart(2, "0")}</div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-display text-lg leading-tight text-ink">{w.title}</div>
                   <div className="truncate text-[12.5px] text-muted">{w.tagline}</div>
