@@ -115,7 +115,11 @@ export default function TerminalTask({
         disabled={done || busy}
         onCommand={(r) => {
           if (done) return;
-          if (r.isErrorish) {
+          // Some steps WANT an error (see the timeout, see Permission denied). If the command
+          // moved a goal forward, it is progress, not a mistake.
+          const now = usePlay.getState();
+          const progressed = goalsMet(task.goals, goalCtx(now.state, now.log)).filter(Boolean).length > lastCount.current;
+          if (r.isErrorish && !progressed) {
             setFailures((f) => f + 1);
             cb.onMistake();
           } else {

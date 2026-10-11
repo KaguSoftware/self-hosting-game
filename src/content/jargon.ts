@@ -44,4 +44,10 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "ls", re: /\bls\b/ },
   { term: "cd", re: /\bcd\b/ },
   { term: "cat", re: /\bcat\b/ },
+  // World 4
+  { term: "private IP", re: /\bprivate IPs?\b/i },
+  { term: "localhost", re: /\blocalhost\b|\b127\.0\.0\.1\b/ },
+  { term: "A record", re: /\bA records?\b/ },
+  { term: "CNAME", re: /\bCNAME\b/ },
+  { term: "TTL", re: /\bTTL\b/ },
 ];

@@ -110,12 +110,17 @@ export default function MapTask({ step, task, cb, done }: { step: Step; task: T;
     const next = applyMapAction(world, isActionActive(world, c.on) ? c.off : c.on);
     usePlay.getState().setWorld(next);
     usePlay.getState().showTrace(traceHttp(next, task.url ?? URL));
+    const before = goalsMet(task.goals, goalCtx({ world, shells: [] }, [])).filter(Boolean).length;
     const ok = goalsMet(task.goals, goalCtx({ world: next, shells: [] }, []));
     if (ok.every(Boolean)) {
       cb.onCorrect();
       finish();
     } else {
-      setFailures((f) => f + 1);
+      // Several switches may be needed, so a right switch is not a mistake. A mistake is
+      // undoing progress, turning on a switch the answer does not use, or turning off one it does.
+      const wanted = task.showMe.some((a) => JSON.stringify(a) === JSON.stringify(c.on));
+      const nowOn = isActionActive(next, c.on);
+      if (ok.filter(Boolean).length < before || nowOn !== wanted) setFailures((f) => f + 1);
     }
   }
 
