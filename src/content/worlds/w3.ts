@@ -1,0 +1,371 @@
+import * as P from "@/sim/predicates";
+import { SSHD_CONFIG } from "@/sim/worlds";
+import type { WorldDef } from "../schema";
+
+const IP = "203.0.113.10";
+
+const SSHD_BLANKS = SSHD_CONFIG.replace("PermitRootLogin yes", "PermitRootLogin {{root}}").replace(
+  "#PasswordAuthentication yes",
+  "PasswordAuthentication {{pw}}",
+);
+
+const SSHD_SOLUTION = SSHD_CONFIG.replace("PermitRootLogin yes", "PermitRootLogin no").replace("#PasswordAuthentication yes", "PasswordAuthentication no");
+
+export const world3: WorldDef = {
+  id: 3,
+  title: "SSH",
+  tagline: "Keys, hardening, and not locking yourself out",
+  cheatSheet: [
+    { cmd: "ssh-keygen -t ed25519", what: "make a key pair (padlock + key)" },
+    { cmd: "~/.ssh/id_ed25519.pub", what: "the padlock: safe to share" },
+    { cmd: "ssh-copy-id deploy@IP", what: "install your padlock on the server" },
+    { cmd: "~/.ssh 700, authorized_keys 600", what: "sshd ignores keys if others can write here" },
+    { cmd: "sudo ufw allow OpenSSH; sudo ufw enable", what: "allow SSH BEFORE turning the firewall on" },
+    { cmd: "PermitRootLogin no / PasswordAuthentication no", what: "in sshd_config. Check sshd_config.d/ too: first value wins" },
+    { cmd: "sudo sshd -t / sudo sshd -T", what: "test config / print what sshd really uses" },
+    { cmd: "sudo systemctl restart ssh", what: "load the new config (service is ssh on Ubuntu)" },
+    { cmd: "Second window", what: "test new logins before closing your working session" },
+    { cmd: "sudo journalctl -u ssh -n 30", what: "why a login was refused" },
+  ],
+  levels: [
+    {
+      id: "w3-01",
+      world: 3,
+      title: "Padlock and key",
+      base: "chain",
+      start: "laptop",
+      steps: [
+        {
+          id: "w3-01-a",
+          mission: "Passwords can be guessed. Keys can't. Keys come in pairs.",
+          intel: {
+            lines: ["A key pair is a padlock and its key.", "The public key (.pub) is the padlock. Hand out copies freely.", "The private key never leaves your laptop."],
+            terms: ["ssh-key"],
+          },
+          task: {
+            kind: "predict",
+            question: "Which one do you put on servers?",
+            options: ["The private key, id_ed25519", "The public key, id_ed25519.pub", "Both"],
+            answer: 1,
+            why: "Servers get padlocks. Only your laptop holds the key that opens them.",
+          },
+          tags: ["ssh-keys"],
+        },
+        {
+          id: "w3-01-b",
+          mission: "Make a key pair on your laptop.",
+          intel: { lines: ["ssh-keygen -t ed25519 makes the pair.", "Press Enter to accept the default file. A passphrase is optional."] },
+          task: {
+            kind: "terminal",
+            goals: [{ describe: "~/.ssh/id_ed25519 and .pub exist", check: P.laptopHasKey }],
+            hints: ["ssh-keygen with -t ed25519, then press Enter at each question.", "ssh-keygen -t ed25519, then Enter three times"],
+            showMe: ["ssh-keygen -t ed25519", "", "", ""],
+            chips: ["ssh-keygen -t ed25519", "ls -la ~/.ssh"],
+          },
+          review: { id: "w3-01-b-q", q: "Which command makes a modern SSH key?", options: ["ssh-keygen -t ed25519", "ssh-key new", "openssl genkey"], answer: 0, why: "ed25519 is short, fast and safe.", tag: "ssh-keys" },
+          tags: ["ssh-keys"],
+        },
+        {
+          id: "w3-01-c",
+          mission: "Print your padlock (the public key).",
+          task: {
+            kind: "terminal",
+            goals: [{ describe: "See your public key", check: P.saw(/^ssh-ed25519 AAAA/m, "laptop") }],
+            hints: ["It is the file ending in .pub inside ~/.ssh", "cat ~/.ssh/id_ed25519.pub"],
+            showMe: ["cat ~/.ssh/id_ed25519.pub"],
+            chips: ["cat ~/.ssh/id_ed25519.pub"],
+          },
+          tags: ["ssh-keys"],
+        },
+      ],
+    },
+    {
+      id: "w3-02",
+      world: 3,
+      title: "Install the padlock",
+      base: "chain",
+      start: "laptop",
+      steps: [
+        {
+          id: "w3-02-c",
+          mission: "Before you install your key: sshd is picky about who can write near keys. Tap the line it would refuse.",
+          task: {
+            kind: "spot",
+            prompt: "ls -la /home/sam/.ssh on another server",
+            mono: true,
+            lines: [
+              "total 12",
+              "drwx------ 2 sam sam 4096 Oct 11 09:31 .",
+              "drwxr-x--- 4 sam sam 4096 Oct 11 09:31 ..",
+              "-rw-rw-rw- 1 sam sam   96 Oct 11 09:31 authorized_keys",
+            ],
+            bugs: [3],
+            why: "If anyone else can write authorized_keys, they could add their own key. sshd ignores it. Use 600.",
+          },
+          review: { id: "w3-02-c-q", q: "Right mode for authorized_keys?", options: ["600", "666", "777"], answer: 0, why: "Owner read/write only.", tag: "ssh-keys" },
+          tags: ["ssh-keys", "permissions"],
+        },
+        {
+          id: "w3-02-a",
+          mission: "Put your public key on the server for deploy.",
+          intel: {
+            lines: ["ssh-copy-id user@IP adds your .pub to the server's ~/.ssh/authorized_keys.", "It needs deploy's password one last time."],
+            terms: ["authorized-keys"],
+          },
+          task: {
+            kind: "terminal",
+            goals: [{ describe: "Key login works for deploy", check: P.keyLoginWorks("deploy") }],
+            hints: ["Run it from your laptop, not the server.", `ssh-copy-id deploy@${IP}, then deploy's password`],
+            showMe: [`ssh-copy-id deploy@${IP}`, "{{deployPassword}}"],
+            chips: ["ssh-copy-id", `deploy@${IP}`],
+          },
+          review: { id: "w3-02-a-q", q: "Where does your public key go on the server?", options: ["~/.ssh/authorized_keys", "/etc/ssh/keys", "~/.ssh/id_ed25519"], answer: 0, why: "One public key per line in the user's authorized_keys.", tag: "ssh-keys" },
+          tags: ["ssh-keys"],
+        },
+        {
+          id: "w3-02-b",
+          mission: "Log in as deploy. No password should be asked.",
+          task: {
+            kind: "terminal",
+            goals: [{ describe: "Logged in as deploy with your key", check: P.sshSessionAs("deploy") }],
+            hints: ["Plain ssh, as deploy.", `ssh deploy@${IP}`],
+            showMe: [`ssh deploy@${IP}`],
+            chips: [`ssh deploy@${IP}`],
+          },
+          tags: ["ssh-keys"],
+        },
+      ],
+    },
+    {
+      id: "w3-03",
+      world: 3,
+      title: "The first ten minutes",
+      base: "chain",
+      steps: [
+        {
+          id: "w3-03-a",
+          mission: "Bots find a new VPS within minutes. Put the hardening steps in order.",
+          intel: { lines: ["Order matters: lock the doors only after your key works."] },
+          task: {
+            kind: "order",
+            prompt: "Top is first.",
+            items: [
+              "Log in as root with the provider's password",
+              "Create a sudo user (deploy)",
+              "Install your SSH key for deploy",
+              "Allow OpenSSH in ufw",
+              "Enable ufw",
+              "Turn off root login and passwords",
+              "Restart ssh",
+              "Test login in a second window before closing the first",
+            ],
+            why: "Every step keeps a working way in until the next one is proven.",
+          },
+          review: { id: "w3-03-a-q", q: "Which comes first?", options: ["ufw allow OpenSSH", "ufw enable"], answer: 0, why: "Allow first, or new SSH logins get blocked.", tag: "hardening" },
+          tags: ["hardening"],
+        },
+        {
+          id: "w3-03-b",
+          mission: "One rule saves more admins than any other.",
+          task: {
+            kind: "predict",
+            question: "Why test in a second window before closing the first?",
+            options: ["It is faster", "If the new settings lock you out, the old window still works so you can undo", "ssh needs two sessions"],
+            answer: 1,
+            why: "Open sessions survive config changes. That window is your safety rope.",
+          },
+          tags: ["hardening"],
+        },
+      ],
+    },
+    {
+      id: "w3-04",
+      world: 3,
+      title: "Firewall first",
+      base: "chain",
+      start: "vps-deploy",
+      steps: [
+        {
+          id: "w3-04-a",
+          mission: "You are about to turn on ufw, the server's firewall.",
+          intel: { lines: ["ufw blocks everything coming in, except what you allow."], terms: ["ufw"] },
+          task: {
+            kind: "predict",
+            question: "You run sudo ufw enable BEFORE allowing SSH. What happens?",
+            options: ["You are kicked out instantly", "This window keeps working, but every NEW ssh login times out", "Nothing, SSH is allowed by default"],
+            answer: 1,
+            why: "ufw keeps existing connections alive. The trap springs the moment you log out.",
+            playout: { actions: [{ type: "ufw", enabled: true }], ssh: { user: "deploy" } },
+          },
+          tags: ["firewall", "hardening"],
+        },
+        {
+          id: "w3-04-b",
+          mission: "Allow SSH, then turn ufw on.",
+          intel: { lines: ["sudo ufw allow OpenSSH opens port 22.", "Then sudo ufw enable. Check with sudo ufw status."] },
+          task: {
+            kind: "terminal",
+            goals: [
+              { describe: "ufw allows SSH (port 22)", check: (g) => g.world.hosts.vps.ufw.rules.some((r) => r.port === 22 && r.action !== "deny") },
+              { describe: "ufw is active", check: P.ufwEnabled },
+            ],
+            hints: ["Allow first, then enable. Both need sudo.", "sudo ufw allow OpenSSH, then sudo ufw enable, then y"],
+            showMe: ["sudo ufw allow OpenSSH", "{{deployPassword}}", "sudo ufw enable", "y"],
+            chips: ["sudo ufw allow OpenSSH", "sudo ufw enable", "sudo ufw status"],
+          },
+          review: { id: "w3-04-b-q", q: "Safe order for a fresh ufw:", options: ["allow OpenSSH, then enable", "enable, then allow OpenSSH", "disable ssh, then enable"], answer: 0, why: "Allow your way in before closing the gate.", tag: "firewall" },
+          tags: ["firewall"],
+        },
+        {
+          id: "w3-04-c",
+          mission: "Prove it. Open a second window (the + tab) and log in as deploy.",
+          task: {
+            kind: "terminal",
+            goals: [{ describe: "Window 2 is logged in as deploy", check: P.secondWindowAs("deploy") }],
+            hints: ["Tap + next to the window tabs. It opens your laptop.", `In window 2: ssh deploy@${IP}`],
+            showMe: [`ssh deploy@${IP}`],
+            showMeShell: 1,
+            windows: true,
+            chips: [`ssh deploy@${IP}`],
+          },
+          tags: ["hardening"],
+        },
+      ],
+    },
+    {
+      id: "w3-05",
+      world: 3,
+      title: "Lock the doors",
+      base: "chain",
+      start: "vps-deploy",
+      steps: [
+        {
+          id: "w3-05-a",
+          mission: "Edit the SSH server settings: no root login, no passwords.",
+          intel: {
+            lines: ["sshd_config holds the SSH server's settings.", "PermitRootLogin no: nobody logs in as root.", "PasswordAuthentication no: keys only."],
+          },
+          task: {
+            kind: "config",
+            host: "vps",
+            path: "/etc/ssh/sshd_config",
+            lang: "sshd",
+            mode: "blanks",
+            start: SSHD_BLANKS,
+            blanks: {
+              root: { options: ["yes", "no", "prohibit-password"], answer: 1 },
+              pw: { options: ["yes", "no"], answer: 1 },
+            },
+            checks: [
+              { describe: "Root login is off", test: (t) => /^\s*PermitRootLogin\s+no\s*$/m.test(t) },
+              { describe: "Password login is off", test: (t) => /^\s*PasswordAuthentication\s+no\s*$/m.test(t) },
+            ],
+            solution: SSHD_SOLUTION,
+            hints: ["Both answers are the same word.", "PermitRootLogin no, PasswordAuthentication no"],
+            writeToSim: true,
+          },
+          review: { id: "w3-05-a-q", q: "Keys only, no passwords:", options: ["PasswordAuthentication no", "PubkeyAuthentication no", "PermitRootLogin yes"], answer: 0, why: "Turn passwords off, keep keys on.", tag: "hardening" },
+          tags: ["hardening", "ssh"],
+        },
+        {
+          id: "w3-05-b",
+          mission: "Restart ssh, then make sure passwords are REALLY off.",
+          intel: { lines: ["Config changes do nothing until the service restarts.", "sudo sshd -T prints what sshd will really use."] },
+          task: {
+            kind: "terminal",
+            goals: [
+              { describe: "Running sshd: root login off", check: P.sshdRunning("permitrootlogin", "no") },
+              { describe: "Running sshd: passwords off", check: P.sshdRunning("passwordauthentication", "no") },
+            ],
+            hints: [
+              "After the restart, run: sudo sshd -T | grep -i password. Still yes? Something else sets it.",
+              "Ubuntu reads /etc/ssh/sshd_config.d/*.conf FIRST and the first value wins. Look at 50-cloud-init.conf, fix it, restart again.",
+            ],
+            showMe: ["sudo rm /etc/ssh/sshd_config.d/50-cloud-init.conf", "{{deployPassword}}", "sudo systemctl restart ssh"],
+            chips: ["sudo systemctl restart ssh", "sudo sshd -T | grep -i password", "ls /etc/ssh/sshd_config.d", "sudo nano /etc/ssh/sshd_config.d/50-cloud-init.conf"],
+          },
+          review: {
+            id: "w3-05-b-q",
+            q: "You set PasswordAuthentication no, restarted, and passwords still work. Why?",
+            options: ["A file in sshd_config.d sets it first, and the first value wins", "You need to reboot", "Ubuntu ignores that setting"],
+            answer: 0,
+            why: "The Include line at the top reads the drop-in folder before the rest.",
+            tag: "hardening",
+          },
+          tags: ["hardening", "ssh"],
+        },
+        {
+          id: "w3-05-c",
+          mission: "Test in a second window: root must be refused, deploy must get in.",
+          task: {
+            kind: "terminal",
+            goals: [
+              { describe: "root is refused", check: P.saw(/root@203\.0\.113\.10: Permission denied \(publickey\)/, "laptop") },
+              { describe: "deploy gets in from window 2", check: P.secondWindowAs("deploy") },
+            ],
+            hints: ["Open window 2 with +. Try root first, then deploy.", `ssh root@${IP} (should fail), then ssh deploy@${IP}`],
+            showMe: [`ssh root@${IP}`, `ssh deploy@${IP}`],
+            showMeShell: 1,
+            windows: true,
+            chips: [`ssh root@${IP}`, `ssh deploy@${IP}`],
+          },
+          tags: ["hardening"],
+        },
+      ],
+    },
+    {
+      id: "w3-06",
+      world: 3,
+      title: "Read the refusal",
+      base: "chain",
+      start: "vps-deploy",
+      steps: [
+        {
+          id: "w3-06-a",
+          mission: "A teammate cannot log in. Tap the log line that explains why.",
+          intel: { lines: ["Your screen only says Permission denied.", "The real reason is in the server's log."] },
+          task: {
+            kind: "spot",
+            prompt: "sudo journalctl -u ssh -n 3",
+            mono: true,
+            lines: [
+              "Oct 11 10:02:11 web-1 sshd[1412]: Connection from 84.20.11.5 port 51234 on 203.0.113.10 port 22",
+              "Oct 11 10:02:11 web-1 sshd[1412]: Authentication refused: bad ownership or modes for directory /home/sam/.ssh",
+              "Oct 11 10:02:12 web-1 sshd[1412]: Connection closed by authenticating user sam 84.20.11.5 port 51234 [preauth]",
+            ],
+            bugs: [1],
+            why: "Someone made /home/sam/.ssh writable by others. sshd ignores every key inside.",
+          },
+          tags: ["ssh", "logs"],
+        },
+        {
+          id: "w3-06-b",
+          mission: "Where to look next time.",
+          task: {
+            kind: "predict",
+            question: "On Ubuntu 24.04, which command shows the SSH server's log?",
+            options: ["sudo journalctl -u ssh", "cat /var/log/sshd", "systemctl logs ssh"],
+            answer: 0,
+            why: "The service is named ssh on Ubuntu. /var/log/auth.log has the same lines.",
+          },
+          tags: ["ssh", "logs"],
+        },
+      ],
+    },
+    {
+      id: "w3-07",
+      world: 3,
+      title: "Incident: locked out",
+      base: "chain",
+      start: "laptop",
+      steps: [
+        {
+          id: "w3-07-a",
+          mission: "Incident! Fix it before uptime runs out.",
+          task: { kind: "incident", incidentId: "publickey" },
+          tags: ["ssh", "debugging"],
+        },
+      ],
+    },
+  ],
+};
