@@ -41,6 +41,18 @@ describe("every part of every command is explained", () => {
     expect(explainLine("usermod -aG sudo deploy").find((p) => p.text === "sudo")?.means).toMatch(/group/);
   });
 
+  it("explains docker by sub-command, with values and the command inside", () => {
+    const run = explainLine("docker run -d --name db -e POSTGRES_PASSWORD=dev -v pgdata:/var/lib/postgresql/data -p 127.0.0.1:5432:5432 postgres:17");
+    expect(run.every((p) => p.means), JSON.stringify(run.filter((p) => !p.means))).toBe(true);
+    expect(run.find((p) => p.text === "postgres:17")?.means).toMatch(/version/);
+    expect(run.find((p) => p.text.startsWith("127.0.0.1:"))?.means).toMatch(/this machine only/);
+    const down = explainLine("docker compose down -v");
+    expect(down.find((p) => p.text === "-v")?.means).toMatch(/delete the volumes/);
+    const exec = explainLine("docker compose exec db psql -U crumb");
+    expect(exec.find((p) => p.text === "db")?.means).toMatch(/service/);
+    expect(exec.find((p) => p.text === "psql")?.means).toMatch(/inside the container/);
+  });
+
   it("explains pipes and redirects", () => {
     const parts = explainLine("sudo sshd -T | grep -i password");
     expect(parts.find((p) => p.text === "|")?.means).toMatch(/pipe/);

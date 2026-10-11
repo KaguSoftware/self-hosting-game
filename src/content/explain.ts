@@ -1,7 +1,7 @@
 // Every part of a command, explained plainly: the command, its sub-command, each flag,
 // each value and argument, and symbols like | && > ~ and :.
 // A test fails if any part of any command the game shows has no explanation.
-import { FLAGS } from "./flags";
+import { FLAGS, splitCommand } from "./flags";
 
 export interface Part {
   text: string;
@@ -138,6 +138,117 @@ const FLAG_VALUE: Record<string, (v: string) => string> = {
   "useradd -G": (v) => `the extra group: ${v}`,
   "useradd -s": (v) => `the shell the user gets: ${v}`,
 };
+
+const DOCKER_SUB: Record<string, string> = {
+  run: "create a new container from an image and start it",
+  ps: "list containers (only running ones, unless you add -a)",
+  logs: "print what a container has written to its log",
+  stop: "stop a running container. It still exists, just stopped",
+  start: "start a stopped container again",
+  restart: "stop it and start it again",
+  rm: "remove a container for good",
+  images: "list the images on this server",
+  pull: "download an image",
+  exec: "run a command inside a container that is already running",
+  build: "build an image from a Dockerfile",
+  inspect: "print every detail about it, as JSON",
+  version: "print Docker's version",
+  info: "print a summary of this Docker install",
+  compose: "Docker Compose: start and manage every container described in compose.yaml, together",
+  volume: "work with volumes: storage that outlives containers",
+  network: "work with Docker's private networks",
+  system: "Docker as a whole",
+};
+const COMPOSE_SUB: Record<string, string> = {
+  up: "create and start every service in compose.yaml. Only services whose settings changed get recreated",
+  down: "stop and remove the containers and their network. Volumes stay, unless you add -v",
+  ps: "list this project's containers and how they are doing",
+  logs: "print the services' logs",
+  restart: "restart the containers as they are. It does NOT pick up changes to .env or compose.yaml",
+  exec: "run a command inside a running service's container",
+  build: "build the images that have a build: section",
+  pull: "download newer versions of the images",
+  config: "print the final settings, with every variable filled in",
+  run: "start a one-off container for a service",
+  stop: "stop the services without removing them",
+  start: "start stopped services again",
+};
+const GROUP_SUB: Record<string, string> = {
+  ls: "list them",
+  rm: "remove one",
+  inspect: "print every detail about one",
+  df: "show how much disk space Docker uses",
+  prune: "delete everything unused to free disk space",
+};
+
+function imageMeaning(ref: string): string {
+  const at = ref.lastIndexOf(":");
+  const hasTag = at > ref.lastIndexOf("/");
+  const name = hasTag ? ref.slice(0, at) : ref;
+  const tag = hasTag ? ref.slice(at + 1) : "";
+  return tag
+    ? `the image: ${name}, version (tag) ${tag}. The part after the colon picks the version`
+    : `the image: ${name}. No tag means :latest, whatever version that happens to be today`;
+}
+
+function portMap(v: string): string {
+  const parts = v.split(":");
+  const [ip, host, ctr] = parts.length === 3 ? parts : ["", parts[0], parts[1] ?? parts[0]];
+  return `server port ${host} leads to port ${ctr} inside the container${ip ? `, but only on ${ip}${ip === "127.0.0.1" ? " (this machine only)" : ""}` : " (on every address, and Docker skips ufw)"}`;
+}
+
+const DOCKER_VALUE: Record<string, (v: string) => string> = {
+  "-p": portMap,
+  "-v": (v) => {
+    const [src, dst] = v.split(":");
+    return `${src.startsWith("/") || src.startsWith(".") ? `the server folder ${src}` : `the volume ${src}`}, shown inside the container at ${dst}`;
+  },
+  "-e": (v) => `sets ${v.split("=")[0]} to "${v.slice(v.indexOf("=") + 1)}" inside the container`,
+  "--name": (v) => `the name you pick: ${v}`,
+  "--restart": (v) => `the restart policy: ${v}`,
+  "--tail": (v) => `how many lines: the last ${v}`,
+  "-t": (v) => `${imageMeaning(v).replace("the image", "the name for the new image")}`,
+  "-w": (v) => `the folder inside the container: ${v}`,
+  "-u": (v) => `the user inside the container: ${v}`,
+};
+
+/** Explain one docker command: names, flags, values, target, and the command it runs inside. */
+function explainDocker(words: string[]): Part[] {
+  const sc = splitCommand(words);
+  const parts: Part[] = [{ text: "docker", means: COMMANDS.docker }];
+  const names = words.slice(1, sc.nameWords);
+  names.forEach((n, i) => {
+    const means = i === 0 ? DOCKER_SUB[n] : words[1] === "compose" ? COMPOSE_SUB[n] : GROUP_SUB[n];
+    parts.push({ text: n, means: means ?? "" });
+  });
+  const rest = sc.rest;
+  for (let i = 0; i < rest.length; i++) {
+    const t = rest[i];
+    if (/^-{1,2}[A-Za-z]/.test(t)) {
+      parts.push({ text: t, means: flagMeaning(sc.cmd, t) });
+      if (sc.valueFlags.includes(t) && rest[i + 1] !== undefined) {
+        const v = rest[++i];
+        parts.push({ text: v, means: DOCKER_VALUE[t]?.(v) ?? "" });
+      }
+      continue;
+    }
+    let means = "";
+    if (/^docker (run|pull|image rm)$/.test(sc.cmd)) means = imageMeaning(t);
+    else if (sc.cmd === "docker build") means = t === "." ? "the build context: this folder. Docker sends its files to the build" : pathMeaning(t);
+    else if (/^docker compose /.test(sc.cmd)) means = `only this service: ${t}`;
+    else if (/^docker (volume|network) /.test(sc.cmd)) means = `the ${sc.cmd.split(" ")[1]}: ${t}`;
+    else means = `the container: ${t}`;
+    if (sc.cmd === "docker compose exec" || sc.cmd === "docker compose run") means = `the service to run it in: ${t}`;
+    if (sc.cmd === "docker exec") means = `the container to run it in: ${t}`;
+    parts.push({ text: t, means });
+  }
+  if (sc.inner?.length) {
+    const inner = explainSimple(sc.inner);
+    if (inner[0]) inner[0] = { ...inner[0], means: inner[0].means ? `runs inside the container: ${inner[0].means}` : "" };
+    parts.push(...inner);
+  }
+  return parts;
+}
 
 const OPERATORS: Record<string, string> = {
   "|": "pipe: send the output of the command on the left into the command on the right",
@@ -321,8 +432,22 @@ export function explainLine(line: string): Part[] {
         }
       }
     }
+    const seg: string[] = [];
+    while (i < toks.length && !OPERATORS[toks[i]]) seg.push(toks[i++]);
+    if (!seg.length) break;
+    parts.push(...explainSimple(seg));
+  }
+  return parts;
+}
+
+/** One simple command (no operators, no sudo): the command, sub-command, flags, values, arguments. */
+function explainSimple(toks: string[]): Part[] {
+  if (toks[0] === "docker") return explainDocker(toks);
+  const parts: Part[] = [];
+  let i = 0;
+  {
     const cmd = toks[i];
-    if (!cmd) break;
+    if (!cmd) return parts;
     parts.push({ text: cmd, means: COMMANDS[cmd] ?? (PLACEHOLDERS[cmd] ? PLACEHOLDERS[cmd] : "") });
     i++;
     let sub: string | undefined;
@@ -337,7 +462,7 @@ export function explainLine(line: string): Part[] {
       i++;
     }
     const seen: string[] = [];
-    while (i < toks.length && !OPERATORS[toks[i]]) {
+    while (i < toks.length) {
       const t = toks[i];
       if (/^-{1,2}[A-Za-z]/.test(t) || t === "-") {
         parts.push({ text: t, means: flagMeaning(cmd, t) });
@@ -345,7 +470,7 @@ export function explainLine(line: string): Part[] {
         // A flag that takes a value: the last letter of a group decides (-aG sudo).
         const last = t.startsWith("--") ? t : `-${t.slice(-1)}`;
         const val = FLAG_VALUE[`${cmd} ${last}`];
-        if (val && toks[i] && !OPERATORS[toks[i]]) {
+        if (val && toks[i]) {
           parts.push({ text: toks[i], means: val(toks[i]) });
           i++;
         }

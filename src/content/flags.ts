@@ -72,9 +72,90 @@ export const FLAGS: FlagInfo[] = [
   { cmd: "wc", flag: "-l", means: "count lines" },
   { cmd: "tee", flag: "-a", means: "append: add to the end of the file instead of replacing it" },
   { cmd: "passwd", flag: "-l", means: "lock: switch password login off for that user" },
+  { cmd: "curl", flag: "-f", means: "fail: treat an error page as an error instead of saving it" },
+  { cmd: "curl", flag: "-S", means: "show errors, even when -s keeps everything else quiet" },
+  { cmd: "curl", flag: "-o", means: "output: save what you download into this file" },
+  // Docker flags depend on the sub-command: -v in "docker run" attaches storage, in "docker compose down" it deletes it.
+  { cmd: "docker run", flag: "-d", means: "detached: run in the background and give your terminal back" },
+  { cmd: "docker run", flag: "-p", means: "publish a port, HOST:CONTAINER, so visitors to the server reach the container" },
+  { cmd: "docker run", flag: "--name", means: "give the container a name you choose (otherwise Docker makes one up)" },
+  { cmd: "docker run", flag: "--rm", means: "delete the container as soon as it stops" },
+  { cmd: "docker run", flag: "-e", means: "environment variable: set NAME=value inside the container" },
+  { cmd: "docker run", flag: "-v", means: "volume: attach storage, NAME:PATH, so data survives the container" },
+  { cmd: "docker run", flag: "--restart", means: "restart policy: when Docker should start it again by itself" },
+  { cmd: "docker run", flag: "-i", means: "interactive: keep the input open so you can type into it" },
+  { cmd: "docker run", flag: "-t", means: "terminal: give it a proper terminal screen" },
+  { cmd: "docker ps", flag: "-a", means: "all: also show stopped containers" },
+  { cmd: "docker logs", flag: "-f", means: "follow: keep printing new lines as they come" },
+  { cmd: "docker logs", flag: "--tail", means: "only the last N lines" },
+  { cmd: "docker exec", flag: "-i", means: "interactive: keep the input open so you can type into it" },
+  { cmd: "docker exec", flag: "-t", means: "terminal: give it a proper terminal screen" },
+  { cmd: "docker rm", flag: "-f", means: "force: stop it first if it is still running" },
+  { cmd: "docker build", flag: "-t", means: "tag: the name (and version after a colon) for the new image" },
+  { cmd: "docker compose up", flag: "-d", means: "detached: start everything in the background and give your terminal back" },
+  { cmd: "docker compose up", flag: "--build", means: "build images from their Dockerfile first, so code changes are included" },
+  { cmd: "docker compose down", flag: "-v", means: "also delete the volumes. Your data is gone for good" },
+  { cmd: "docker compose logs", flag: "-f", means: "follow: keep printing new lines as they come" },
+  { cmd: "docker compose logs", flag: "--tail", means: "only the last N lines" },
+  { cmd: "docker compose exec", flag: "-T", means: "no terminal: needed in scripts and cron, where nobody is typing" },
+  { cmd: "docker compose exec", flag: "-w", means: "work directory: run the command inside this folder in the container" },
 ];
 
-const COMMANDS = new Set(FLAGS.map((f) => f.cmd));
+/** First words that have flags: "docker compose up" counts as "docker". */
+const COMMANDS = new Set(FLAGS.map((f) => f.cmd.split(" ")[0]));
+
+/** Docker sub-commands that take a second word: docker volume ls, docker system df. */
+const DOCKER_GROUPS = new Set(["compose", "volume", "network", "system", "image", "container"]);
+/** Flags that eat the next word as their value, per (sub-)command. */
+const TAKES_VALUE: Record<string, string[]> = {
+  "docker run": ["--name", "-e", "-v", "-p", "--network", "--restart", "-w", "-u", "--env-file"],
+  "docker exec": ["-w", "-u", "-e"],
+  "docker build": ["-t", "-f"],
+  "docker logs": ["--tail", "-n"],
+  "docker compose logs": ["--tail", "-n"],
+  "docker compose exec": ["-w", "-u", "-e"],
+  "docker compose run": ["-w", "-u", "-e"],
+};
+
+export interface SplitCommand {
+  /** "ls", or "docker run", or "docker compose up" */
+  cmd: string;
+  /** How many words the command name used. */
+  nameWords: number;
+  /** Words after the name (flags, values, arguments), up to any inner command. */
+  rest: string[];
+  /** docker exec db psql -U crumb: the command run inside the container ("psql -U crumb"). */
+  inner?: string[];
+  /** Flags in `rest` that take the next word as a value. */
+  valueFlags: string[];
+}
+
+/** Work out which command a run of words is, so flags are looked up in the right place. */
+export function splitCommand(words: string[]): SplitCommand {
+  if (words[0] !== "docker" || !words[1] || words[1].startsWith("-")) {
+    return { cmd: words[0] ?? "", nameWords: 1, rest: words.slice(1), valueFlags: [] };
+  }
+  let n = 2;
+  let cmd = `docker ${words[1]}`;
+  if (DOCKER_GROUPS.has(words[1]) && words[2] && !words[2].startsWith("-")) {
+    cmd += ` ${words[2]}`;
+    n = 3;
+  }
+  const valueFlags = TAKES_VALUE[cmd] ?? [];
+  const rest = words.slice(n);
+  const runsInside = /^docker (compose )?(run|exec)$/.test(cmd);
+  if (!runsInside) return { cmd, nameWords: n, rest, valueFlags };
+  // After the flags, the first plain word is the image or service. Everything after it runs inside.
+  for (let i = 0; i < rest.length; i++) {
+    const w = rest[i];
+    if (w.startsWith("-")) {
+      if (valueFlags.includes(w)) i++;
+      continue;
+    }
+    return { cmd, nameWords: n, rest: rest.slice(0, i + 1), inner: rest.slice(i + 1), valueFlags };
+  }
+  return { cmd, nameWords: n, rest, valueFlags };
+}
 
 export function flagKey(cmd: string, flag: string): string {
   return `${cmd} ${flag}`;
@@ -114,14 +195,19 @@ function segments(line: string): string[][] {
 /** Flags in one command line, with their meanings. Unknown flags come back with empty parts. */
 export function flagsIn(line: string): FlagNote[] {
   const out: FlagNote[] = [];
-  for (let words of segments(line)) {
+  const queue = segments(line);
+  while (queue.length) {
+    let words = queue.shift()!;
     while (words[0] === "sudo" && !(words[1]?.startsWith("-"))) words = words.slice(1);
-    const cmd = words[0];
-    if (!cmd) continue;
-    for (const w of words.slice(1)) {
+    if (!words[0]) continue;
+    const sc = splitCommand(words);
+    for (let i = 0; i < sc.rest.length; i++) {
+      const w = sc.rest[i];
       if (!/^-{1,2}[A-Za-z]/.test(w) && w !== "-") continue;
-      out.push({ key: flagKey(cmd, w), cmd, flag: w, parts: lookup(cmd, w) ?? [] });
+      out.push({ key: flagKey(sc.cmd, w), cmd: sc.cmd, flag: w, parts: lookup(sc.cmd, w) ?? [] });
+      if (sc.valueFlags.includes(w)) i++;
     }
+    if (sc.inner?.length) queue.unshift(sc.inner);
   }
   return out;
 }
