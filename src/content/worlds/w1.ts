@@ -157,6 +157,7 @@ export const world1: WorldDef = {
             question: "Which plan?",
             options: ["XS: 1 vCPU, 1 GB, €3.50", "S: 2 vCPU, 4 GB, €4.50", "M: 4 vCPU, 8 GB, €8.50", "L: 8 vCPU, 16 GB, €16.90"],
             answer: 1,
+            fixedOrder: true,
             why: "Next.js ~300 MB, Postgres ~200 MB, plus builds and headroom. 4 GB fits. You can resize later.",
             playout: { actions: [{ type: "rent", plan: "S" }], persist: true },
           },

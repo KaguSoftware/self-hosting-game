@@ -7,6 +7,13 @@ import { traceHttp } from "@/sim/net";
 import { sshCheck } from "@/sim/sshAuth";
 import { INCIDENTS, LEVELS, QUIZ, WORLDS, replay } from "./index";
 import { TERMS } from "./dictionary";
+import { worldStart } from "./worlds/start";
+import { world0 } from "./worlds/w0";
+import { world1 } from "./worlds/w1";
+import { world2 } from "./worlds/w2";
+import { world3 } from "./worlds/w3";
+
+const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3];
 import type { Step } from "./schema";
 
 const VARS = { deployPassword: "test-pass-1" };
@@ -74,6 +81,36 @@ describe("content lint", () => {
           }
       }
     for (const q of Object.values(QUIZ)) expect(q.answer).toBeLessThan(q.options.length);
+  });
+});
+
+describe("answer positions", () => {
+  it("does not bunch right answers into one spot", () => {
+    const positions: number[] = [];
+    for (const l of LEVELS)
+      for (const s of l.steps) {
+        const t = s.task;
+        if (t.kind === "predict" && !t.fixedOrder && t.options.length > 2) positions.push(t.answer);
+        if (t.kind === "rapid") for (const q of t.items) if (q.options.length > 2) positions.push(q.answer);
+      }
+    const counts = [0, 1, 2].map((p) => positions.filter((x) => x === p).length);
+    for (const c of counts) expect(c / positions.length, `answer positions ${counts.join("/")}`).toBeLessThan(0.5);
+    for (const c of counts) expect(c, `answer positions ${counts.join("/")}`).toBeGreaterThan(0);
+  });
+
+  it("keeps answers pointing at the same text after mixing", () => {
+    const original = new Map<string, string>();
+    for (const w of AUTHORED_FOR_TEST)
+      for (const l of w.levels)
+        for (const s of l.steps) {
+          if (s.task.kind === "predict") original.set(s.id, s.task.options[s.task.answer]);
+          if (s.task.kind === "rapid") for (const q of s.task.items) original.set(q.id, q.options[q.answer]);
+        }
+    for (const l of LEVELS)
+      for (const s of l.steps) {
+        if (s.task.kind === "predict") expect(s.task.options[s.task.answer]).toBe(original.get(s.id));
+        if (s.task.kind === "rapid") for (const q of s.task.items) expect(q.options[q.answer]).toBe(original.get(q.id));
+      }
   });
 });
 

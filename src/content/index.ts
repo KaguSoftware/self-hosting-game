@@ -1,4 +1,5 @@
 import { makeReplay } from "@/engine/replay";
+import { mixOptions } from "@/engine/shuffle";
 import { INCIDENTS } from "./incidents";
 import type { Level, QuizItem, Step, WorldDef } from "./schema";
 import { worldStart } from "./worlds/start";
@@ -7,7 +8,26 @@ import { world1 } from "./worlds/w1";
 import { world2 } from "./worlds/w2";
 import { world3 } from "./worlds/w3";
 
-export const WORLDS: WorldDef[] = [worldStart, world0, world1, world2, world3];
+const AUTHORED: WorldDef[] = [worldStart, world0, world1, world2, world3];
+
+function mixQuiz(q: QuizItem): QuizItem {
+  return { ...q, ...mixOptions(q.id, q.options, q.answer) };
+}
+
+/**
+ * Content is written with the right answer wherever was handy (often first).
+ * Mix every multiple-choice question once, with a stable seed, so the right
+ * answer lands in a different spot from question to question.
+ */
+function mixStep(s: Step): Step {
+  const t = s.task;
+  const review = s.review ? mixQuiz(s.review) : undefined;
+  if (t.kind === "predict" && !t.fixedOrder) return { ...s, review, task: { ...t, ...mixOptions(s.id, t.options, t.answer) } };
+  if (t.kind === "rapid") return { ...s, review, task: { ...t, items: t.items.map(mixQuiz) } };
+  return review ? { ...s, review } : s;
+}
+
+export const WORLDS: WorldDef[] = AUTHORED.map((w) => ({ ...w, levels: w.levels.map((l) => ({ ...l, steps: l.steps.map(mixStep) })) }));
 
 /** Worlds still being built. Shown locked on the path. */
 export const UPCOMING: { id: number; title: string; tagline: string }[] = [

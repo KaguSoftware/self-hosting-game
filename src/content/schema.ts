@@ -100,6 +100,8 @@ export type Task =
       options: string[];
       answer: number;
       why: string;
+      /** Keep the written order (for options that are naturally ordered, like plan sizes). */
+      fixedOrder?: boolean;
       /** Shown on the map after answering. Preview only unless persist. */
       playout?: { actions: MapAction[]; url?: string; ssh?: { user: string }; persist?: boolean };
     }
