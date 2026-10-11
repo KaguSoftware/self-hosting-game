@@ -122,7 +122,12 @@ export type Task =
       /** Applied to the world (kept) when solved. */
       apply?: MapAction[];
     }
-  | { kind: "incident"; incidentId: string }
+  | {
+      kind: "incident";
+      incidentId: string;
+      /** Replay it on a newer server: start from this level's end instead of the incident's own (drills). */
+      after?: string;
+    }
   | {
       kind: "mission";
       /** The brief: what "done" means, in plain words. */

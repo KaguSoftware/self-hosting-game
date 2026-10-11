@@ -17,7 +17,7 @@ export const ProgressZ = z.object({
   }),
   vars: z.record(z.string(), z.string()),
   settings: z.object({ muted: z.boolean() }),
-  onCall: z.object({ best: z.number(), runs: z.number() }),
+  onCall: z.object({ best: z.number(), runs: z.number(), bestScore: z.number() }),
   /** Where each flag ("ls -la") was explained, so notes stop after 3 showings. */
   flagSeen: z.record(z.string(), z.array(z.string())),
 });
@@ -35,7 +35,7 @@ export function emptyProgress(): Progress {
     stats: { worlds: {}, tags: {} },
     vars: {},
     settings: { muted: false },
-    onCall: { best: 0, runs: 0 },
+    onCall: { best: 0, runs: 0, bestScore: 0 },
     flagSeen: {},
   };
 }
@@ -107,7 +107,7 @@ export function mergeProgress(a: Progress, b: Progress): Progress {
     streak: { ...newer.streak, best: Math.max(a.streak.best, b.streak.best) },
     review: [...reviewIds.values()],
     vars: { ...b.vars, ...a.vars },
-    onCall: { best: Math.max(a.onCall.best, b.onCall.best), runs: Math.max(a.onCall.runs, b.onCall.runs) },
+    onCall: { best: Math.max(a.onCall.best, b.onCall.best), runs: Math.max(a.onCall.runs, b.onCall.runs), bestScore: Math.max(a.onCall.bestScore ?? 0, b.onCall.bestScore ?? 0) },
     flagSeen: Object.fromEntries(
       [...new Set([...Object.keys(a.flagSeen), ...Object.keys(b.flagSeen)])].map((k) => [k, [...new Set([...(a.flagSeen[k] ?? []), ...(b.flagSeen[k] ?? [])])].slice(0, 3)]),
     ),

@@ -17,13 +17,30 @@ import { sfx } from "@/lib/sfx";
 import Terminal from "../terminal/Terminal";
 import { Btn, GoalList, HintBar, KeyHint, OptionKey, useEnterKey, useNumberKeys, type TaskCallbacks } from "./common";
 
-export function incidentStartState(inc: Incident, vars: Record<string, string>) {
-  const lvl = replay.levelById(inc.after)!;
+export function incidentStartState(inc: Incident, vars: Record<string, string>, after = inc.after) {
+  const lvl = replay.levelById(after)!;
   const world = produce(replay.levelEndWorld(lvl, vars), inc.breakIt);
   return { world, shells: shellsFor(inc.start) };
 }
 
-export default function IncidentTask({ incident, cb, done }: { incident: Incident; cb: TaskCallbacks; done: boolean }) {
+export default function IncidentTask({
+  incident,
+  cb,
+  done,
+  after,
+  onTimeout,
+  record = true,
+}: {
+  incident: Incident;
+  cb: TaskCallbacks;
+  done: boolean;
+  /** Start from this level's end instead of the incident's own (World 11 drills). */
+  after?: string;
+  /** Uptime hit zero (On-call ends the shift). */
+  onTimeout?: () => void;
+  /** Save the score to the player's incident records. */
+  record?: boolean;
+}) {
   const vars = useProgress((s) => s.vars);
   const { state, log, tick } = usePlay();
   const busy = usePlay((s) => s.busy);
@@ -36,9 +53,9 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
   const started = useRef(0);
 
   useEffect(() => {
-    usePlay.getState().load(incidentStartState(incident, vars), vars, "Pager went off. You are on your laptop.");
+    usePlay.getState().load(incidentStartState(incident, vars, after), vars, "Pager went off. You are on your laptop.");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incident.id]);
+  }, [incident.id, after]);
 
   useEffect(() => {
     if (phase !== "live") return;
@@ -60,7 +77,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
     const score = incidentScore({ seconds, limit: incident.timeLimit, commands, hints: hintsUsed, showMe: usedShowMe });
     setResult({ score, seconds, commands });
     setPhase("fixed");
-    useProgress.getState().incident(incident.id, score, seconds, commands);
+    if (record) useProgress.getState().incident(incident.id, score, seconds, commands);
     if (incident.url) usePlay.getState().showTrace(traceHttp(state.world, incident.url));
     else if (incident.sshUser) usePlay.getState().showTrace(sshCheck(state.world, "you", incident.sshUser, state.world.hosts.vps.publicIp ?? "").trace);
     sfx.fanfare();
@@ -69,6 +86,13 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
   }, [allMet, phase]);
 
   const uptime = Math.max(0, 100 - (elapsed / incident.timeLimit) * 100);
+  const timedOut = useRef(false);
+  useEffect(() => {
+    if (phase === "live" && uptime <= 0 && onTimeout && !timedOut.current) {
+      timedOut.current = true;
+      onTimeout();
+    }
+  }, [phase, uptime, onTimeout]);
 
   async function showMe() {
     setUsedShowMe(true);

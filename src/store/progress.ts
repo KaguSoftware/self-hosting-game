@@ -11,6 +11,8 @@ interface Actions {
   miss(quizId: string | undefined): void;
   reviewResult(quizId: string, correct: boolean): void;
   incident(id: string, score: number, seconds: number, commands: number): void;
+  /** An On-call shift ended after `pages` fixed incidents with this total score. */
+  onCallShift(pages: number, score: number): void;
   setVar(k: string, v: string): void;
   setMuted(m: boolean): void;
   /** Record that a flag note was shown at `where` (a step id or terminal run id). */
@@ -88,6 +90,8 @@ export const useProgress = create<ProgressStore>()(
           if (prev && prev.best >= score) return {};
           return { incidents: { ...s.incidents, [id]: { best: score, seconds, commands } } };
         }),
+      onCallShift: (pages, score) =>
+        set((s) => ({ onCall: { runs: s.onCall.runs + 1, best: Math.max(s.onCall.best, pages), bestScore: Math.max(s.onCall.bestScore ?? 0, score) } })),
       setVar: (k, v) => set((s) => ({ vars: { ...s.vars, [k]: v } })),
       setMuted: (m) => set((s) => ({ settings: { ...s.settings, muted: m } })),
       sawFlags: (keys, where) =>

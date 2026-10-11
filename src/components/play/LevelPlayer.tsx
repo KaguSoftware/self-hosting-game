@@ -197,7 +197,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
       case "allocate":
         return <AllocateTask key={key} step={step} task={t} cb={cb} done={done} />;
       case "incident":
-        return incident ? <IncidentTask key={key} incident={incident} cb={cb} done={done} /> : null;
+        return incident ? <IncidentTask key={key} incident={incident} cb={cb} done={done} after={t.after} /> : null;
       case "mission":
         return <MissionTask key={key} step={step} task={t} cb={cb} done={done} />;
     }

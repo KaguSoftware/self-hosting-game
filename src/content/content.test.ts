@@ -167,6 +167,21 @@ describe("incidents", () => {
       if (inc.url) expect(traceHttp(fixed.world, inc.url).ok).toBe(true);
     });
   }
+  // World 11 drills replay an incident on a newer server.
+  for (const level of LEVELS)
+    for (const step of level.steps) {
+      const t = step.task;
+      if (t.kind !== "incident" || !t.after) continue;
+      it(`${step.id}: ${t.incidentId} drill on ${t.after}`, () => {
+        const inc = INCIDENTS.find((i) => i.id === t.incidentId)!;
+        let state = { world: produce(replay.levelEndWorld(replay.levelById(t.after!)!, VARS), inc.breakIt), shells: shellsFor(inc.start) };
+        expect(goalsMet(inc.goals, goalCtx(state, [])).every(Boolean), "already fixed").toBe(false);
+        if (inc.fixMap) state = { ...state, world: applyMapActions(state.world, inc.fixMap) };
+        const { state: fixed, log } = execScript(state, inc.fixShell ?? 0, inc.fix, VARS);
+        expect(goalsMet(inc.goals, goalCtx(fixed, log)).every(Boolean), log.map((e) => e.out).join("\n")).toBe(true);
+      });
+    }
+
   it("publickey incident fails at the auth hop", () => {
     const inc = INCIDENTS.find((i) => i.id === "publickey")!;
     const world = produce(replay.levelEndWorld(replay.levelById(inc.after)!, VARS), inc.breakIt);
