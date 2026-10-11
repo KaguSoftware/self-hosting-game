@@ -50,4 +50,12 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "A record", re: /\bA records?\b/ },
   { term: "CNAME", re: /\bCNAME\b/ },
   { term: "TTL", re: /\bTTL\b/ },
+  // World 5
+  { term: "image", re: /\bimages?\b/i },
+  { term: "volume", re: /\bvolumes?\b/i },
+  { term: "Dockerfile", re: /\bDockerfile\b/ },
+  { term: "layer", re: /\blayers?\b/i },
+  { term: "compose", re: /\bcompose\b/i },
+  { term: "healthcheck", re: /\bhealth ?checks?\b/i },
+  { term: "restart policy", re: /\brestart polic(y|ies)\b/i },
 ];

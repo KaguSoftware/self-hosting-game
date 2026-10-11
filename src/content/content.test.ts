@@ -13,8 +13,9 @@ import { world1 } from "./worlds/w1";
 import { world2 } from "./worlds/w2";
 import { world3 } from "./worlds/w3";
 import { world4 } from "./worlds/w4";
+import { world5 } from "./worlds/w5";
 
-const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4];
+const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5];
 import type { Step } from "./schema";
 
 const VARS = { deployPassword: "test-pass-1" };

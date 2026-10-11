@@ -334,6 +334,11 @@ function argMeaning(cmd: string, sub: string | undefined, a: string, prev: strin
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) return `sets ${a.split("=")[0]} to "${a.slice(a.indexOf("=") + 1)}" just for this command`;
   if (/^\$\(/.test(a)) return "runs the command inside $( ) first and puts its output here";
   if (/^\$\{?\w+/.test(a)) return `the value of the variable ${a.replace(/[${}]/g, "")}`;
+  if (cmd === "sed" && /^(['"])s(.)/.test(a)) {
+    const d = a[2];
+    const [, from, to] = a.slice(1, -1).split(d);
+    return `the edit, in quotes so the shell leaves it alone: s${d}OLD${d}NEW${d} means swap "${from}" for "${to}" (the first one on each line)`;
+  }
   if (/^(['"]).*\1$/.test(a)) return "text in quotes, kept together as one piece";
   const userHost = /^([\w.-]+)@([\w.-]+)$/.exec(a);
   if (userHost) return `log in as the user ${userHost[1]} on the machine ${userHost[2]}`;

@@ -8,8 +8,9 @@ import { world1 } from "./worlds/w1";
 import { world2 } from "./worlds/w2";
 import { world3 } from "./worlds/w3";
 import { world4 } from "./worlds/w4";
+import { world5 } from "./worlds/w5";
 
-const AUTHORED: WorldDef[] = [worldStart, world0, world1, world2, world3, world4];
+const AUTHORED: WorldDef[] = [worldStart, world0, world1, world2, world3, world4, world5];
 
 function mixQuiz(q: QuizItem): QuizItem {
   return { ...q, ...mixOptions(q.id, q.options, q.answer) };
@@ -32,7 +33,6 @@ export const WORLDS: WorldDef[] = AUTHORED.map((w) => ({ ...w, levels: w.levels.
 
 /** Worlds still being built. Shown locked on the path. */
 export const UPCOMING: { id: number; title: string; tagline: string }[] = [
-  { id: 5, title: "Docker", tagline: "Images, volumes, compose, and the localhost trap" },
   { id: 6, title: "Reverse proxy and HTTPS", tagline: "Caddy owns 443" },
   { id: 7, title: "Life after Supabase", tagline: "Postgres, auth, storage, migrations" },
   { id: 8, title: "Security and backups", tagline: "3-2-1, cron, disk full" },

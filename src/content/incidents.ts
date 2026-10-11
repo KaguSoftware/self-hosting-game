@@ -1,6 +1,12 @@
 import { getDir, getFile } from "@/sim/fs";
 import * as P from "@/sim/predicates";
 import { DOMAIN, VPS_IP, WRONG_IP } from "@/sim/constants";
+import { runDetached } from "@/sim/shell/run";
+import { advance } from "@/sim/tick";
+import type { Frame } from "@/sim/types";
+
+/** deploy on web-1, in the shop's folder, as a fresh login (so the docker group counts). */
+const DEPLOY_SHOP: Frame = { host: "vps", user: "deploy", cwd: "/srv/crumb", via: "ssh", remote: VPS_IP, loginGroups: ["deploy", "sudo", "docker"] };
 import type { Incident } from "./schema";
 
 const IP = "203.0.113.10";
@@ -129,6 +135,80 @@ INCIDENTS.push(
       "Never fix it by switching a firewall off.",
     ],
     timeLimit: 240,
+  },
+);
+
+// ---------- World 5 ----------
+INCIDENTS.push(
+  {
+    id: "crash-loop-env",
+    title: "The app keeps restarting",
+    client: {
+      name: "Sam, your teammate",
+      message: "I cleaned up the .env on web-1 last night, removed some old lines. Now the shop is down and docker ps says Restarting over and over?",
+    },
+    after: "w5-07",
+    start: "vps-deploy",
+    breakIt: (w) => {
+      const env = getFile(w.hosts.vps, "/srv/crumb/.env");
+      if (env) env.content = env.content.replace(/^AUTH_SECRET=.*\n/m, "");
+      runDetached(w, DEPLOY_SHOP, "docker compose up -d");
+      advance(w, w.clock + 40);
+    },
+    goals: [
+      { describe: "The app container stays up", check: P.containerRunning("app") },
+      { describe: "The app reaches the database", check: P.appReachesDb("app") },
+    ],
+    hints: [
+      "Restarting over and over means it crashes right at start. The reason is in its logs: docker compose logs --tail 20 app",
+      "The log says AUTH_SECRET is not set. Add it back to .env, then docker compose up -d (restart keeps the old settings).",
+    ],
+    fastestPath: [
+      "cd /srv/crumb; docker compose ps   → app is Restarting",
+      "docker compose logs --tail 20 app   → AUTH_SECRET is not set",
+      "echo 'AUTH_SECRET=long-random-value' >> .env",
+      "docker compose up -d   → app recreated with the setting",
+    ],
+    fix: ["cd /srv/crumb", "echo 'AUTH_SECRET=long-random-value' >> .env", "docker compose up -d"],
+    debrief: [
+      "Restarting over and over means it crashes on start.",
+      "The reason is in the first lines of its logs.",
+      "Changed .env? docker compose up -d recreates the container. restart does not.",
+    ],
+    timeLimit: 300,
+  },
+  {
+    id: "db-localhost",
+    title: "Every order fails",
+    client: {
+      name: "Riya, who runs the shop",
+      message: "The shop loads but every order fails! Sam says he 'copied the working .env from his laptop' this morning.",
+    },
+    after: "w5-07",
+    start: "vps-deploy",
+    breakIt: (w) => {
+      runDetached(w, DEPLOY_SHOP, "sed -i 's/@db:/@localhost:/' .env");
+      runDetached(w, DEPLOY_SHOP, "docker compose up -d");
+      advance(w, w.clock + 20);
+    },
+    goals: [{ describe: "The app reaches the database", check: P.appReachesDb("app") }],
+    hints: [
+      "Read the app's log: docker compose logs --tail 20 app. Which address does it try?",
+      "On a laptop the database is at localhost. In compose it is at db. Fix DATABASE_URL in .env, then docker compose up -d.",
+    ],
+    fastestPath: [
+      "cd /srv/crumb; docker compose logs --tail 20 app   → ECONNREFUSED 127.0.0.1:5432",
+      "grep DATABASE_URL .env   → @localhost:5432",
+      "sed -i 's/@localhost:/@db:/' .env",
+      "docker compose up -d",
+    ],
+    fix: ["cd /srv/crumb", "sed -i 's/@localhost:/@db:/' .env", "docker compose up -d"],
+    debrief: [
+      "Inside a container, localhost is that container.",
+      "Use the service name: db.",
+      "After editing .env, docker compose up -d recreates the container.",
+    ],
+    timeLimit: 300,
   },
 );
 

@@ -72,6 +72,8 @@ export const FLAGS: FlagInfo[] = [
   { cmd: "wc", flag: "-l", means: "count lines" },
   { cmd: "tee", flag: "-a", means: "append: add to the end of the file instead of replacing it" },
   { cmd: "passwd", flag: "-l", means: "lock: switch password login off for that user" },
+  { cmd: "sed", flag: "-i", means: "in place: change the file itself instead of printing the result" },
+  { cmd: "sed", flag: "-E", means: "extended patterns: write ( ) + ? without backslashes" },
   { cmd: "curl", flag: "-f", means: "fail: treat an error page as an error instead of saving it" },
   { cmd: "curl", flag: "-S", means: "show errors, even when -s keeps everything else quiet" },
   { cmd: "curl", flag: "-o", means: "output: save what you download into this file" },

@@ -47,7 +47,7 @@ const NAMES = ["turing", "hopper", "lovelace", "curie", "darwin", "feynman", "go
 
 function randomName(host: Host, seed: string): string {
   const h = parseInt(hashHex(seed, 8), 16);
-  const base = `${ADJECTIVES[h % ADJECTIVES.length]}_${NAMES[(h >> 8) % NAMES.length]}`;
+  const base = `${ADJECTIVES[h % ADJECTIVES.length]}_${NAMES[(h >>> 8) % NAMES.length]}`;
   let name = base;
   for (let i = 2; host.docker.containers[name]; i++) name = `${base}${i}`;
   return name;

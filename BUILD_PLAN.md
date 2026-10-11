@@ -5,10 +5,11 @@ This is the plan any chat can follow to keep building the game. Read it, `CONTEN
 ## What exists (done)
 
 - **Live:** https://self-hosting-game.vercel.app. A push to `main` deploys it (Vercel is connected to GitHub `KaguSoftware/self-hosting-game`).
-- **Worlds:** Start here, then 0 (big picture), 1 (servers), 2 (Linux), 3 (SSH, plus the incident "Permission denied (publickey)"), 4 (networking: DNS panel, provider firewall panel, Docker-skips-ufw side level, incidents "The shop vanished" and "443 times out").
+- **Worlds:** Start here, then 0 (big picture), 1 (servers), 2 (Linux), 3 (SSH, plus the incident "Permission denied (publickey)"), 4 (networking: DNS panel, provider firewall panel, Docker-skips-ufw side level, incidents "The shop vanished" and "443 times out"), 5 (Docker: install, containers, volumes, layer cache, a Next.js Dockerfile, compose, healthchecks; incidents "The app keeps restarting" and "Every order fails").
 - **Engine:** level player; task kinds `terminal`, `map` (route, match, toggle), `config`, `predict`, `spot`, `order`, `match`, `rapid`, `allocate`, `budget`, `incident`; XP, combo, streak, review queue, hints, show me, sounds, dictionary (words and flags), cheat sheets, profile, export/import, cloud save (Upstash Redis via `/api/progress`).
 - **Guard tests:** every level is replayed through the simulator, plus checks for basis, jargon, flags, word count, answer mix and dashes. See `CONTENT_GUIDE.md`.
-- **Not built yet:** Worlds 5 to 12, the remaining incidents, the final mission, On-call mode, the Docker, Compose, Caddy, Postgres, cron and GitLab parts of the simulator.
+- **Simulator:** Docker and Compose are built (`src/sim/docker/`, `src/sim/shell/commands/docker.ts`): install by script or apt repo, run/ps/logs/exec/build, compose up/down/restart/logs/ps, healthchecks, restart policies and crash loops on the sim clock (`src/sim/tick.ts`), layer cache, NEXT_PUBLIC_ baking, required env read from the app's code. Hooks for later worlds: `registerBootHook` (Caddy) and `registerExecHook` (psql, caddy reload).
+- **Not built yet:** Worlds 6 to 12, the remaining incidents, the final mission, On-call mode, and the Caddy certificate, Postgres data, cron and GitLab parts of the simulator.
 
 ## Where things live
 
@@ -38,9 +39,9 @@ This is the plan any chat can follow to keep building the game. Read it, `CONTEN
 - No em or en dashes in UI copy. No invented brand names.
 - Accuracy target: Ubuntu 24.04, Docker Compose v2, Caddy 2, Postgres 17, GitLab CI. The real gotchas are the most valuable part, so keep them.
 
-## The server so far (end of World 4)
+## The server so far (end of World 5)
 
-The chain world after `w3-06`: VPS `web-1` (203.0.113.10, plan S: 2 vCPU, 4 GB) is rented. User `deploy` has sudo and the laptop's ed25519 key. Root login and password login are off (the cloud-init drop-in was fixed). ufw is on and allows 22, 80 and 443. The `hello` service runs on 0.0.0.0:8080 (kept on purpose: World 8 removes it as attack surface). `/srv/crumb/.env` is 600 and owned by deploy. `ncdu` is installed and packages are upgraded. DNS: `crumb.shop` A 203.0.113.10 and `www.crumb.shop` CNAME crumb.shop. The provider firewall is on with exactly 22, 80 and 443. Nothing listens on 80 or 443 yet. **Docker is not installed.** Each world must leave the server in a state the next world can build on.
+The chain world after `w3-06`: VPS `web-1` (203.0.113.10, plan S: 2 vCPU, 4 GB) is rented. User `deploy` has sudo and the laptop's ed25519 key. Root login and password login are off (the cloud-init drop-in was fixed). ufw is on and allows 22, 80 and 443. The `hello` service runs on 0.0.0.0:8080 (kept on purpose: World 8 removes it as attack surface). `/srv/crumb/.env` is 600 and owned by deploy. `ncdu` is installed and packages are upgraded. DNS: `crumb.shop` A 203.0.113.10 and `www.crumb.shop` CNAME crumb.shop. The provider firewall is on with exactly 22, 80 and 443. Nothing listens on 80 or 443 yet. Docker CE is installed and deploy is in the `docker` group. `/srv/crumb/app` holds the shop's Next.js code with a three-stage `Dockerfile` (standalone, `HOSTNAME=0.0.0.0`). `/srv/crumb/compose.yaml` runs `app` (built from ./app, restart unless-stopped, waits for a healthy db) and `db` (`postgres:17`, `pgdata` volume, `pg_isready` healthcheck). `.env` (600, deploy) has POSTGRES_*, AUTH_SECRET and `DATABASE_URL=...@db:5432/crumb`. **No container publishes a port yet: there is no Caddy.** Each world must leave the server in a state the next world can build on.
 
 ## World plans
 
