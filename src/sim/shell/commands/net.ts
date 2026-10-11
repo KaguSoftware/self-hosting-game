@@ -4,6 +4,7 @@ import { fsErrorText, writeFile } from "../../fs";
 import { isIp, resolveName, traceHttp } from "../../net";
 import { dateTime } from "../../time";
 import type { TraceResult } from "../../types";
+import { liveRevision } from "../../gitlab/state";
 import type { Command, Ctx } from "../ctx";
 
 function httpDate(ctx: Ctx) {
@@ -29,7 +30,12 @@ function headers(ctx: Ctx, t: TraceResult, url: string): string[] {
   if (svc) lines.push(`Server: SimpleHTTP/0.6 Python/3.12.3`, `Content-type: text/html; charset=utf-8`);
   lines.push(`date: ${httpDate(ctx)}`);
   if (viaCaddy) lines.push(`server: Caddy`);
-  if (t.hops.some((h) => h.id === "app" && h.ok) && status !== 502) lines.push(`x-powered-by: Next.js`);
+  if (t.hops.some((h) => h.id === "app" && h.ok) && status !== 502) {
+    lines.push(`x-powered-by: Next.js`);
+    // The shop stamps every response with the commit it was built from.
+    const rev = liveRevision(ctx.w);
+    if (rev) lines.push(`x-app-version: ${rev.slice(0, 8)}`);
+  }
   if (status === 502) lines.push(`content-length: 0`);
   return lines;
 }
@@ -44,7 +50,9 @@ function body(t: TraceResult, ctx: Ctx): string {
   const direct = t.hops.find((h) => h.node.startsWith("c:"));
   const c = direct && ctx.w.hosts.vps.docker.containers[direct.node.slice(2)];
   if (c && ctx.w.hosts.vps.docker.images[normalizeRef(c.image)]?.meta?.flavor === "nginx") return "<!DOCTYPE html>\n<html>\n<head>\n<title>Welcome to nginx!</title>";
-  return `<!DOCTYPE html><html lang="en"><head><title>Crumb | Fresh bread, daily</title></head><body><main><h1>Crumb</h1>...</main></body></html>`;
+  const rev = t.hops.some((h) => h.id === "app" && h.ok) ? liveRevision(ctx.w) : undefined;
+  const footer = rev ? `<footer>version ${rev.slice(0, 8)}</footer>` : "";
+  return `<!DOCTYPE html><html lang="en"><head><title>Crumb | Fresh bread, daily</title></head><body><main><h1>Crumb</h1>...</main>${footer}</body></html>`;
 }
 
 export const curl: Command = {

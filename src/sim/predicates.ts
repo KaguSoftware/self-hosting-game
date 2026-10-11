@@ -1,10 +1,13 @@
 // Goal predicates. Levels check the resulting STATE, never exact commands.
-import { getDir, getFile, userGroups } from "./fs";
+import { getDir, getFile, isSudoer, userGroups } from "./fs";
 import { appToDb, providerAllows, resolveName, traceHttp, ufwAllows as ufwAllowsPort } from "./net";
 import { sshCheck } from "./sshAuth";
 import { runningSshd } from "./sshd";
 import type { Container, HopId, Host, HostId, Shell, World } from "./types";
-import { localImage } from "./docker/images";
+import { APP_REPO, localImage } from "./docker/images";
+import { checkLogin, GITLAB_REGISTRY, readAuths } from "./docker/auth";
+import { latestPipeline, revisionOfImage } from "./gitlab/state";
+import type { JobStatus, PipelineStatus } from "./gitlab/types";
 import { dockerInstalled as engineInstalled } from "./docker/runtime";
 
 export interface LogEntry {
@@ -310,4 +313,107 @@ export const imageBaked =
   (g) => {
     const baked = localImage(vpsHost(g), ref)?.meta?.baked ?? {};
     return value === undefined ? key in baked : baked[key] === value;
+  };
+
+// ---------- gitlab ----------
+
+/** The newest pipeline on this ref has this status ("success", "failed", "pending", ...). */
+export const pipelineStatus =
+  (ref: string, status: PipelineStatus): Check =>
+  (g) =>
+    latestPipeline(g.world.gitlab, ref)?.status === status;
+
+/** The newest run of the job with this name (in the newest pipeline that has it, optionally on one ref). */
+export const jobStatus =
+  (name: string, status: JobStatus, ref?: string): Check =>
+  (g) => {
+    const ps = g.world.gitlab?.pipelines ?? [];
+    for (let i = ps.length - 1; i >= 0; i--) {
+      if (ref && ps[i].ref !== ref) continue;
+      const j = ps[i].jobs.find((x) => x.name === name);
+      if (j) return j.status === status;
+    }
+    return false;
+  };
+
+/** A CI/CD variable exists, with these settings when given. */
+export const ciVar =
+  (key: string, opts: { file?: boolean; protected?: boolean; masked?: boolean } = {}): Check =>
+  (g) => {
+    const v = g.world.gitlab?.variables.find((x) => x.key === key);
+    if (!v) return false;
+    if (opts.file !== undefined && (v.type === "file") !== opts.file) return false;
+    if (opts.protected !== undefined && v.protected !== opts.protected) return false;
+    if (opts.masked !== undefined && v.masked !== opts.masked) return false;
+    return true;
+  };
+
+function shaMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const hex = /^[0-9a-f]{7,40}$/;
+  return hex.test(a) && hex.test(b) && (a.startsWith(b) || b.startsWith(a));
+}
+
+/** The GitLab registry has the app image under this tag ("latest", or a commit sha, short or full). */
+export const registryHas =
+  (tag: string): Check =>
+  (g) =>
+    Object.keys(g.world.registry ?? {}).some((ref) => ref.startsWith(`${APP_REPO}:`) && shaMatch(ref.slice(APP_REPO.length + 1), tag));
+
+/** The running app container (compose service "app", else any running Next.js container). */
+export function liveAppContainer(w: World): Container | undefined {
+  const vps = w.hosts.vps;
+  const app = findDockerContainer(vps, "app");
+  if (app?.status === "running") return app;
+  return Object.values(vps.docker.containers).find((c) => c.kind === "nextjs" && c.status === "running");
+}
+
+/** The running app container's image was built from this commit (short or full sha). */
+export const liveVersion =
+  (sha: string): Check =>
+  (g) => {
+    const c = liveAppContainer(g.world);
+    const rev = c ? revisionOfImage(g.world, c.imageId) : undefined;
+    return !!rev && shaMatch(rev, sha);
+  };
+
+export const runnerOnline: Check = (g) => !!g.world.gitlab?.runners.some((r) => r.online);
+
+/** User ci exists, is in the docker group, and cannot use sudo. */
+export const ciUserLimited: Check = (g) => {
+  const vps = g.world.hosts.vps;
+  return !!vps.users.ci && userGroups(vps, "ci").includes("docker") && !isSudoer(vps, "ci");
+};
+
+export const protectedBranch =
+  (name: string): Check =>
+  (g) =>
+    !!g.world.gitlab?.protectedBranches.includes(name);
+
+/** The laptop's key is on the GitLab profile, so a push can get in. */
+export const gitlabKeyAdded: Check = (g) => {
+  const pub = getFile(g.world.hosts.laptop, "/home/you/.ssh/id_ed25519.pub")?.content;
+  return !!pub && !!g.world.gitlab?.userKeys.some((k) => k.split(/\s+/)[1] === pub.split(/\s+/)[1]);
+};
+
+/** GitLab's branch is at the laptop's commit (the work is pushed). */
+export const pushed =
+  (branch = "main"): Check =>
+  (g) => {
+    const gl = g.world.gitlab;
+    return !!gl?.local && !!gl.local.branches[branch] && gl.branches[branch] === gl.local.branches[branch];
+  };
+
+/** An active deploy token with this scope exists. */
+export const deployTokenActive =
+  (scope: "read_registry" | "write_registry" | "read_repository" = "read_registry"): Check =>
+  (g) =>
+    !!g.world.gitlab?.deployTokens.some((t) => !t.revoked && t.scopes.includes(scope));
+
+/** `user` on the VPS has a working docker login to the GitLab registry that may pull. */
+export const registryLoginWorks =
+  (user: string): Check =>
+  (g) => {
+    const cred = readAuths(g.world.hosts.vps, user)[GITLAB_REGISTRY];
+    return !!cred && checkLogin(g.world, GITLAB_REGISTRY, cred).pull;
   };

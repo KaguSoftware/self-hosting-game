@@ -1,5 +1,6 @@
 // The whole simulated universe. Pure data, no functions, so it can be
 // cloned, snapshotted, replayed and compared in tests.
+import type { GitLabState } from "./gitlab/types";
 
 export type HostId = "laptop" | "vps";
 
@@ -202,6 +203,8 @@ export interface World {
   flags: Record<string, string | number | boolean>;
   /** Extra images in remote registries (pushed by CI, or placed by a level). */
   registry?: Record<string, RegistryImage>;
+  /** The GitLab project, its CI/CD and the laptop's clone (World 9). */
+  gitlab?: GitLabState;
 }
 
 // ---------- docker ----------
@@ -238,6 +241,8 @@ export interface ImageMeta {
   /** Built here with docker build, not pulled. */
   built?: boolean;
   digest?: string;
+  /** Commit the image was built from (the OCI revision label CI sets). */
+  revision?: string;
 }
 
 /** The Postgres data inside a volume, written on first start. */

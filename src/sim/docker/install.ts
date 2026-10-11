@@ -63,11 +63,17 @@ ${INSTALL_SCRIPT_MARKER}
 __docker_install "$@"
 `;
 
+const GITLAB_HOME = `<!DOCTYPE html>\n<html class="gl-light" lang="en">\n<head>\n<title>Sign in · GitLab</title>\n</head>\n<body>\n<h1>GitLab.com</h1>\n</body>\n</html>\n`;
+
 /** Files on the internet that curl can download (outside our own server). */
 export const EXTERNAL_URLS: Record<string, string> = {
   "https://get.docker.com": GET_DOCKER_SH,
   "https://get.docker.com/": GET_DOCKER_SH,
   [DOCKER_GPG_URL]: DOCKER_GPG,
+  "https://gitlab.com": GITLAB_HOME,
+  "https://gitlab.com/": GITLAB_HOME,
+  "https://gitlab.com/users/sign_in": GITLAB_HOME,
+  "https://registry.gitlab.com/v2/": `{"errors":[{"code":"UNAUTHORIZED","message":"authentication required","detail":null}]}\n`,
 };
 
 export function externalUrl(url: string): string | undefined {

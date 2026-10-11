@@ -41,6 +41,8 @@ import type { Container, HealthCheck, PortMap } from "../../types";
 import { hashHex } from "../../util";
 import { parseDuration, parseDotenv } from "../../docker/compose";
 import type { Command, Ctx } from "../ctx";
+import { withDockerClient } from "../../docker/auth";
+import { cmdLogin, cmdLogout, cmdPush, cmdTag } from "./dockerRegistry";
 
 // ---------- talking to the daemon ----------
 
@@ -1375,6 +1377,10 @@ const SUBS: Record<string, (ctx: Ctx, args: string[]) => number> = {
     return SUBS[to](ctx, a.slice(1));
   },
   compose,
+  login: cmdLogin,
+  logout: cmdLogout,
+  tag: cmdTag,
+  push: cmdPush,
 };
 
 const HELP = `
@@ -1435,7 +1441,8 @@ export const docker: Command = {
       ctx.out(`Usage:  docker ${sub} [OPTIONS]\n\nRun 'docker --help' for the list of commands.`);
       return 0;
     }
-    return fn(ctx, args.slice(1));
+    // Pulls read the registry logins of whoever runs the CLI (root under sudo).
+    return withDockerClient(ctx.host, ctx.user, () => fn(ctx, args.slice(1)));
   },
   resume(ctx, p, input) {
     if (!p.data.prune) return 0;
