@@ -197,6 +197,8 @@ export interface Shell {
   frames: Frame[];
   history: string[];
   pending?: Pending;
+  /** Shell variables set with NAME=value or export. Passed to commands as their environment. */
+  vars?: Record<string, string>;
 }
 
 export interface OutLine {

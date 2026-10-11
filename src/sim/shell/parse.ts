@@ -1,4 +1,4 @@
-// Bash-lite parser: words, quotes, $VARS, ~, |, &&, ||, ;, >, >>, 2>/dev/null.
+// Bash-lite parser: words, quotes, $VARS, $(...), ~, |, &&, ||, ;, <, >, >>, 2>/dev/null, VAR=x cmd.
 
 export interface Word {
   text: string;
@@ -6,13 +6,20 @@ export interface Word {
   quoted: boolean;
 }
 
-export type Token = { t: "word"; w: Word } | { t: "op"; op: "|" | "&&" | "||" | ";" | ">" | ">>" | "2>" | "2>&1" };
+export type Token = { t: "word"; w: Word } | { t: "op"; op: "|" | "&&" | "||" | ";" | ">" | ">>" | "<" | "2>" | "2>&1" };
 
 export interface SimpleCommand {
   argv: Word[];
   redirect?: { op: ">" | ">>"; target: string };
+  /** cmd < file */
+  stdinFrom?: string;
   stderrNull?: boolean;
+  /** VAR=x before the command name. With no command at all, these set shell variables. */
+  env?: Record<string, string>;
 }
+
+/** Runs the inside of $(...) and returns its output. */
+export type Subst = (inner: string) => string;
 
 export interface Pipeline {
   cmds: SimpleCommand[];
@@ -24,7 +31,7 @@ export interface Sequence {
 
 export class ParseError extends Error {}
 
-export function tokenize(line: string, vars: Record<string, string>): Token[] {
+export function tokenize(line: string, vars: Record<string, string>, subst?: Subst): Token[] {
   const tokens: Token[] = [];
   let i = 0;
   let cur = "";
@@ -39,6 +46,20 @@ export function tokenize(line: string, vars: Record<string, string>): Token[] {
   const expandVar = (): string => {
     // at line[i] === "$"
     let name = "";
+    if (line[i + 1] === "(") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < line.length && depth > 0) {
+        if (line[j] === "(") depth++;
+        else if (line[j] === ")") depth--;
+        j++;
+      }
+      if (depth > 0) throw new ParseError("unexpected EOF while looking for matching `)'");
+      const inner = line.slice(i + 2, j - 1);
+      i = j;
+      if (!subst) throw new ParseError("$(...) is not supported here");
+      return subst(inner).replace(/\n+$/, "");
+    }
     if (line[i + 1] === "{") {
       const end = line.indexOf("}", i + 2);
       if (end === -1) throw new ParseError("bad substitution");
@@ -121,7 +142,7 @@ export function tokenize(line: string, vars: Record<string, string>): Token[] {
       i += 2;
       continue;
     }
-    if (c === "|" || c === ";" || c === ">") {
+    if (c === "|" || c === ";" || c === ">" || c === "<") {
       flush();
       tokens.push({ t: "op", op: c });
       i++;
@@ -138,20 +159,22 @@ export function tokenize(line: string, vars: Record<string, string>): Token[] {
   return tokens;
 }
 
-export function parse(line: string, vars: Record<string, string>): Sequence {
-  const tokens = tokenize(line, vars);
+export function parse(line: string, vars: Record<string, string>, subst?: Subst): Sequence {
+  const tokens = tokenize(line, vars, subst);
   const seq: Sequence = { items: [] };
   let pipeline: Pipeline = { cmds: [] };
   let cmd: SimpleCommand = { argv: [] };
   const endCmd = () => {
-    if (!cmd.argv.length) throw new ParseError("syntax error near unexpected token");
+    if (!cmd.argv.length && !cmd.env) throw new ParseError("syntax error near unexpected token");
     pipeline.cmds.push(cmd);
     cmd = { argv: [] };
   };
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
     if (tok.t === "word") {
-      cmd.argv.push(tok.w);
+      const m = !cmd.argv.length ? /^([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/.exec(tok.w.text) : null;
+      if (m) (cmd.env ??= {})[m[1]] = m[2];
+      else cmd.argv.push(tok.w);
       continue;
     }
     switch (tok.op) {
@@ -163,6 +186,13 @@ export function parse(line: string, vars: Record<string, string>): Sequence {
         const target = tokens[i + 1];
         if (!target || target.t !== "word") throw new ParseError("syntax error near unexpected token `newline'");
         cmd.redirect = { op: tok.op, target: target.w.text };
+        i++;
+        break;
+      }
+      case "<": {
+        const target = tokens[i + 1];
+        if (!target || target.t !== "word") throw new ParseError("syntax error near unexpected token `newline'");
+        cmd.stdinFrom = target.w.text;
         i++;
         break;
       }
@@ -184,7 +214,7 @@ export function parse(line: string, vars: Record<string, string>): Sequence {
         break;
     }
   }
-  if (cmd.argv.length) endCmd();
+  if (cmd.argv.length || cmd.env) endCmd();
   if (pipeline.cmds.length) seq.items.push({ pipeline });
   else if (seq.items.length && seq.items[seq.items.length - 1].next !== ";") {
     throw new ParseError("syntax error: unexpected end of line");

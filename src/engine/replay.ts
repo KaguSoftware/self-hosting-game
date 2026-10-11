@@ -89,7 +89,13 @@ export function makeReplay(index: LevelIndex) {
     if (hit) return hit;
     let w: World;
     if (level.base === "demo") w = createDemoWorld();
-    else {
+    else if (level.base === "fresh") w = createWorld();
+    else if (level.base === "side") {
+      // The latest chain level before this one in play order.
+      const at = index.levels.findIndex((l) => l.id === level.id);
+      const prev = index.levels.slice(0, at).filter((l) => l.base === "chain").pop();
+      w = prev ? levelEndWorld(prev, vars) : createWorld();
+    } else {
       const i = chain.findIndex((l) => l.id === level.id);
       w = i <= 0 ? createWorld() : levelEndWorld(chain[i - 1], vars);
     }

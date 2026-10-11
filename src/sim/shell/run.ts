@@ -1,10 +1,11 @@
 import { createDraft, finishDraft, setAutoFreeze } from "immer";
-import { getDir, isSudoer, resolvePath } from "../fs";
+import { can, getDir, getNode, isSudoer, resolvePath } from "../fs";
+import { advance } from "../tick";
 import type { Frame, OutLine, Pending, Shell, World } from "../types";
 import { globMatch } from "../util";
 import type { Ctx, RunResult } from "./ctx";
 import { parse, ParseError, type Sequence, type SimpleCommand, type Word } from "./parse";
-import { COMMANDS, NEEDS_PACKAGE, NOT_INSTALLED_HINT } from "./registry";
+import { COMMANDS, NEEDS_ANY_PACKAGE, NEEDS_PACKAGE, NOT_INSTALLED_HINT } from "./registry";
 import { writeRedirect } from "./redirect";
 
 setAutoFreeze(false);
@@ -39,11 +40,16 @@ interface Exec {
   emit: Ctx["emit"];
   vars: Record<string, string>;
   stopped: boolean;
+  /** When set, the last command's stdout goes here instead of the screen ($(...)). */
+  capture?: string[];
+  /** Script nesting depth, to stop runaway recursion. */
+  depth?: number;
 }
 
 function baseVars(ex: Exec): Record<string, string> {
   const f = topFrame(ex.sh);
   return {
+    ...(ex.sh.vars ?? {}),
     ...ex.vars,
     HOME: homeOf(ex.w, f),
     USER: f.user,
@@ -54,7 +60,11 @@ function baseVars(ex: Exec): Record<string, string> {
   };
 }
 
-function makeCtx(ex: Exec, argv: string[], opts: { sudo: boolean; stdin?: string; outBuf: string[]; errNull?: boolean }): Ctx {
+function makeCtx(
+  ex: Exec,
+  argv: string[],
+  opts: { sudo: boolean; stdin?: string; outBuf: string[]; errNull?: boolean; env?: Record<string, string> },
+): Ctx {
   const frame = topFrame(ex.sh);
   const host = ex.w.hosts[frame.host];
   const user = opts.sudo ? "root" : frame.user;
@@ -71,6 +81,8 @@ function makeCtx(ex: Exec, argv: string[], opts: { sudo: boolean; stdin?: string
     stdin: opts.stdin,
     home,
     vars: baseVars(ex),
+    env: { ...(ex.sh.vars ?? {}), ...(opts.env ?? {}) },
+    script: (text, args, name) => runScriptText(ex, text, args, name),
     out: (s) => opts.outBuf.push(s),
     err: (s) => {
       if (!opts.errNull) ex.out.push({ text: s, kind: "err" });
@@ -113,11 +125,80 @@ function expandWord(ex: Exec, w: Word): string[] {
   return matches.map((m) => prefix + m);
 }
 
+/** Run the inside of $(...) and return what it printed. */
+function captureSubst(ex: Exec, inner: string): string {
+  const prev = ex.capture;
+  ex.capture = [];
+  try {
+    runSequence(ex, parse(inner, baseVars(ex), (i) => captureSubst(ex, i)));
+    return ex.capture.join("\n");
+  } finally {
+    ex.capture = prev;
+  }
+}
+
+function parseLine(ex: Exec, line: string): Sequence {
+  return parse(line, baseVars(ex), (inner) => captureSubst(ex, inner));
+}
+
+/**
+ * Run a script's text line by line, the way bash runs a file: in its own copy of the
+ * shell, so a cd inside the script does not move you. Supports set -e.
+ */
+function runScriptText(ex: Exec, text: string, args: string[], name: string): number {
+  if ((ex.depth ?? 0) > 6) {
+    ex.out.push({ text: `${name}: too many nested scripts`, kind: "err" });
+    return 1;
+  }
+  const frame = topFrame(ex.sh);
+  const savedCwd = frame.cwd;
+  const savedVars = { ...ex.vars };
+  const frames = ex.sh.frames.length;
+  ex.depth = (ex.depth ?? 0) + 1;
+  args.forEach((a, i) => (ex.vars[String(i + 1)] = a));
+  ex.vars["0"] = name;
+  let code = 0;
+  let stopOnError = false;
+  try {
+    for (const raw of text.split("\n")) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      if (/^set\s+-[a-z]*e/.test(line)) {
+        stopOnError = true;
+        continue;
+      }
+      if (/^set\s/.test(line)) continue;
+      let seq: Sequence;
+      try {
+        seq = parseLine(ex, line);
+      } catch (e) {
+        ex.out.push({ text: `${name}: ${e instanceof ParseError ? e.message : String(e)}`, kind: "err" });
+        code = 2;
+        if (stopOnError) break;
+        continue;
+      }
+      code = runSequence(ex, seq);
+      if (ex.stopped || (stopOnError && code !== 0)) break;
+    }
+  } finally {
+    ex.depth = (ex.depth ?? 1) - 1;
+    ex.sh.frames.length = Math.min(ex.sh.frames.length, Math.max(frames, 1));
+    topFrame(ex.sh).cwd = savedCwd;
+    ex.vars = savedVars;
+  }
+  return code;
+}
+
 function sudoUsed(seq: Sequence): boolean {
   return seq.items.some((it) => it.pipeline.cmds.some((c) => c.argv[0]?.text === "sudo"));
 }
 
 function runSimple(ex: Exec, cmd: SimpleCommand, stdin: string | undefined, isLast: boolean): { code: number; stdout: string } {
+  if (!cmd.argv.length) {
+    // NAME=value on its own sets a shell variable.
+    ex.sh.vars = { ...(ex.sh.vars ?? {}), ...(cmd.env ?? {}) };
+    return { code: 0, stdout: "" };
+  }
   let argv = cmd.argv.flatMap((w) => expandWord(ex, w));
   let sudo = false;
   const frame = topFrame(ex.sh);
@@ -162,23 +243,38 @@ function runSimple(ex: Exec, cmd: SimpleCommand, stdin: string | undefined, isLa
     sudo = asUser === "root";
   }
 
+  if (cmd.stdinFrom) {
+    const path = resolvePath(frame.cwd, cmd.stdinFrom, homeOf(ex.w, frame));
+    const node = getNode(host, path);
+    if (!node || node.type !== "file") {
+      ex.out.push({ text: `-bash: ${cmd.stdinFrom}: ${node ? "Is a directory" : "No such file or directory"}`, kind: "err" });
+      return { code: 1, stdout: "" };
+    }
+    if (!can(host, frame.user, node, "r")) {
+      ex.out.push({ text: `-bash: ${cmd.stdinFrom}: Permission denied`, kind: "err" });
+      return { code: 1, stdout: "" };
+    }
+    stdin = node.content;
+  }
+
   const name = argv[0];
+  if (name.includes("/")) return runPath(ex, cmd, argv, sudo, isLast);
   const command = COMMANDS[name];
   const pkg = NEEDS_PACKAGE[name];
-  if (!command || (pkg && !host.packages[pkg])) {
-    if (pkg && !host.packages[pkg]) {
+  const pkgs = NEEDS_ANY_PACKAGE[name] ?? (pkg ? [pkg] : []);
+  const missing = pkgs.length > 0 && !pkgs.some((p) => host.packages[p]);
+  if (!command || missing) {
+    if (missing && pkg) {
       const hint = NOT_INSTALLED_HINT[name] ?? `sudo apt install ${pkg}`;
       ex.out.push({ text: `Command '${name}' not found, but can be installed with:\n${hint}`, kind: "err" });
     } else if (name === "vim" || name === "vi") {
       ex.out.push({ text: `vim works on a real server. In this game, use nano.`, kind: "info" });
-    } else if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(name)) {
-      ex.out.push({ text: `Setting variables is not in this game yet. Edit a .env file with nano instead.`, kind: "info" });
     } else {
       ex.out.push({ text: `${name}: not in this game yet. Type help to see what works.`, kind: "info" });
     }
     return { code: 127, stdout: "" };
   }
-  const ctx = makeCtx(ex, argv, { sudo, stdin, outBuf, errNull: cmd.stderrNull });
+  const ctx = makeCtx(ex, argv, { sudo, stdin, outBuf, errNull: cmd.stderrNull, env: cmd.env });
   let code: number;
   try {
     code = command.run(ctx);
@@ -196,7 +292,46 @@ function runSimple(ex: Exec, cmd: SimpleCommand, stdin: string | undefined, isLa
     }
     stdout = "";
   } else if (isLast && stdout) {
-    ex.out.push({ text: stdout, kind: "out" });
+    if (ex.capture) ex.capture.push(stdout);
+    else ex.out.push({ text: stdout, kind: "out" });
+  }
+  return { code, stdout };
+}
+
+/** ./backup.sh or /srv/crumb/backup.sh: run a script file. Needs the x bit, like real bash. */
+function runPath(ex: Exec, cmd: SimpleCommand, argv: string[], sudo: boolean, isLast: boolean): { code: number; stdout: string } {
+  const frame = topFrame(ex.sh);
+  const host = ex.w.hosts[frame.host];
+  const name = argv[0];
+  const path = resolvePath(frame.cwd, name, homeOf(ex.w, frame));
+  const node = getNode(host, path);
+  if (!node) {
+    ex.out.push({ text: `-bash: ${name}: No such file or directory`, kind: "err" });
+    return { code: 127, stdout: "" };
+  }
+  if (node.type === "dir") {
+    ex.out.push({ text: `-bash: ${name}: Is a directory`, kind: "err" });
+    return { code: 126, stdout: "" };
+  }
+  const user = sudo ? "root" : frame.user;
+  if (!can(host, user, node, "x") || !can(host, user, node, "r")) {
+    ex.out.push({ text: `-bash: ${name}: Permission denied`, kind: "err" });
+    if (!(node.mode & 0o111)) ex.out.push({ text: `Tip: a script needs the x (execute) bit. chmod +x ${name}`, kind: "info" });
+    return { code: 126, stdout: "" };
+  }
+  const prevCapture = ex.capture;
+  const buf: string[] = [];
+  if (cmd.redirect || !isLast) ex.capture = buf;
+  const code = runScriptText(ex, node.content, argv.slice(1), name);
+  ex.capture = prevCapture;
+  let stdout = buf.join("\n");
+  if (cmd.redirect) {
+    const err = writeRedirect(ex.w, frame, cmd.redirect.target, stdout, cmd.redirect.op === ">>");
+    if (err) {
+      ex.out.push({ text: `-bash: ${cmd.redirect.target}: ${err}`, kind: "err" });
+      return { code: 1, stdout: "" };
+    }
+    stdout = "";
   }
   return { code, stdout };
 }
@@ -245,11 +380,11 @@ export function runLine(world: World, shell: Shell, line: string, vars: Record<s
   if (!trimmed) return finish(ex, w, sh, 0);
   sh.history.push(trimmed);
   if (sh.history.length > 300) sh.history.splice(0, sh.history.length - 300);
-  w.clock += 4;
+  advance(w, w.clock + 4);
 
   let seq: Sequence;
   try {
-    seq = parse(trimmed, baseVars(ex));
+    seq = parseLine(ex, trimmed);
   } catch (e) {
     const msg = e instanceof ParseError ? e.message : String(e);
     ex.out.push({ text: `-bash: ${msg}`, kind: "err" });
@@ -289,8 +424,8 @@ function resumePending(ex: Exec, p: Pending, input: string): number {
       return 1;
     }
     frame.sudoOk = true;
-    ex.w.clock += 2;
-    const seq = parse(String(p.data.line), baseVars(ex));
+    advance(ex.w, ex.w.clock + 2);
+    const seq = parseLine(ex, String(p.data.line));
     return runSequence(ex, seq);
   }
   const command = COMMANDS[p.cmd];
@@ -309,6 +444,25 @@ export function cancelPending(world: World, shell: Shell): RunResult {
   const w = createDraft(world) as World;
   sh.pending = undefined;
   return { world: finishDraft(w) as World, shell: finishDraft(sh) as Shell, out: [{ text: "^C", kind: "out" }], code: 130 };
+}
+
+/**
+ * Run one line on a world that is ALREADY a draft (inside a reconciler: cron, CI jobs).
+ * Uses its own throwaway window. Returns the exit code and everything printed.
+ */
+export function runDetached(w: World, frame: Frame, line: string, vars: Record<string, string> = {}): { code: number; out: string } {
+  const sh: Shell = { id: "detached", frames: [{ ...frame }], history: [] };
+  const ex: Exec = { w, sh, out: [], emit: {}, vars: { ...vars }, stopped: false };
+  let code: number;
+  try {
+    code = runSequence(ex, parseLine(ex, line));
+  } catch (e) {
+    ex.out.push({ text: `sh: 1: ${e instanceof ParseError ? e.message : String(e)}`, kind: "err" });
+    code = 2;
+  }
+  // Nothing can answer a prompt here (no terminal), like cron.
+  if (sh.pending) code = code || 1;
+  return { code, out: ex.out.map((o) => o.text).join("\n") };
 }
 
 /** Run many lines in a row (show me, replays, tests). */

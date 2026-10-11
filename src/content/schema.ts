@@ -160,8 +160,12 @@ export interface Level {
   id: string;
   world: number;
   title: string;
-  /** World 0 plays on the finished demo stack. Everything else grows one server. */
-  base: "demo" | "chain";
+  /**
+   * chain: grows the one server (starts where the previous chain level ended).
+   * demo: the finished stack (World 0). side: starts from the chain, but its changes are
+   * thrown away afterwards (a friend's server, a what-if). fresh: a brand new world.
+   */
+  base: "demo" | "chain" | "side" | "fresh";
   start?: StartPreset;
   /** Extra state for this level, applied on top of the chain (immer draft). */
   setup?: (w: World) => void;

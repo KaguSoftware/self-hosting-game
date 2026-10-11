@@ -1,6 +1,7 @@
 import { APT_COMMANDS } from "./commands/apt";
 import { FILE_COMMANDS } from "./commands/files";
 import { NET_COMMANDS } from "./commands/net";
+import { SCRIPT_COMMANDS, sed } from "./commands/scripts";
 import { SSH_COMMANDS } from "./commands/ssh";
 import { SYSTEM_COMMANDS } from "./commands/system";
 import { SYSTEMD_COMMANDS } from "./commands/systemd";
@@ -11,7 +12,7 @@ import type { Command } from "./ctx";
 
 const GROUPS: [string, Command[]][] = [
   ["Files", FILE_COMMANDS],
-  ["Reading", TEXT_COMMANDS],
+  ["Reading", [...TEXT_COMMANDS, sed]],
   ["System", SYSTEM_COMMANDS],
   ["Software", APT_COMMANDS],
   ["Services", SYSTEMD_COMMANDS],
@@ -19,6 +20,7 @@ const GROUPS: [string, Command[]][] = [
   ["Firewall", UFW_COMMANDS],
   ["SSH", SSH_COMMANDS],
   ["Network", NET_COMMANDS],
+  ["Scripts", SCRIPT_COMMANDS],
 ];
 
 const help: Command = {
@@ -60,6 +62,11 @@ export const NEEDS_PACKAGE: Record<string, string> = {
   nginx: "nginx",
   docker: "docker-ce",
   caddy: "caddy",
+};
+
+/** Commands any one of several packages provides (docker comes from docker-ce or docker.io). */
+export const NEEDS_ANY_PACKAGE: Record<string, string[]> = {
+  docker: ["docker-ce", "docker.io"],
 };
 
 export const NOT_INSTALLED_HINT: Record<string, string> = {

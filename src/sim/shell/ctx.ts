@@ -15,6 +15,10 @@ export interface Ctx {
   stdin?: string;
   home: string;
   vars: Record<string, string>;
+  /** Environment the command sees: shell variables plus VAR=x prefixes. */
+  env: Record<string, string>;
+  /** Run text as a shell script in this window (sh file, bash file). Returns the exit code. */
+  script(text: string, args: string[], name: string): number;
   out(s: string): void;
   err(s: string): void;
   /** Game voice, shown in teal. Use sparingly. */
