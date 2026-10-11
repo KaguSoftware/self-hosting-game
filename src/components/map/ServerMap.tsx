@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { deriveMap, type MapNode } from "@/sim/map";
 import type { TraceResult, World } from "@/sim/types";
 import { sfx } from "@/lib/sfx";
+import { LETTERS, OptionKey, useLetterKeys, useNumberKeys } from "../play/common";
 
 type Pt = { x: number; y: number };
 
@@ -26,6 +27,8 @@ export interface ServerMapProps {
   /** Node ids to dim (e.g. already-used in a route). */
   done?: string[];
   forceVertical?: boolean;
+  /** Keyboard: letters tap the boxes (when interactive), numbers flip the switches. Badges show the keys. */
+  keys?: boolean;
   className?: string;
   title?: string;
 }
@@ -204,7 +207,7 @@ function horizontalLayout(nodes: MapNode[], W: number, rented: boolean, extraH: 
 }
 
 export default function ServerMap(props: ServerMapProps) {
-  const { world, trace, traceKey = 0, interactive, onNodeTap, flash, tags, toggles, onToggle, done, forceVertical, className, title } = props;
+  const { world, trace, traceKey = 0, interactive, onNodeTap, flash, tags, toggles, onToggle, done, forceVertical, className, title, keys } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const reduced = useReducedMotion();
@@ -239,6 +242,22 @@ export default function ServerMap(props: ServerMapProps) {
     return { x: ((p.x + L.w[id] / 2) / W) * 100, y: ((p.y + NODE_H / 2) / L.height) * 100 };
   };
   const vpsCenter: Pt = { x: ((L.vps.left + L.vps.width / 2) / W) * 100, y: ((L.vps.top + L.vps.height / 2) / L.height) * 100 };
+
+  // ----- keyboard -----
+  // Boxes get letters (A, B, C... reading order: top to bottom, left to right), switches get numbers.
+  const order = model.nodes
+    .filter((n) => n.id !== "vps" && L.at[n.id])
+    .map((n) => n.id)
+    .sort((a, b) => L.at[a].y - L.at[b].y || L.at[a].x - L.at[b].x);
+  const nodeKey: Record<string, string> = {};
+  if (keys && interactive) order.slice(0, LETTERS.length).forEach((id, i) => (nodeKey[id] = LETTERS[i]));
+  const toggleOrder = keys && toggles ? order.flatMap((id) => toggles.filter((x) => x.node === id)) : [];
+  const toggleKey = (x: MapToggle) => {
+    const i = toggleOrder.findIndex((y) => y.node === x.node && y.label === x.label);
+    return i >= 0 && i < 9 ? i + 1 : undefined;
+  };
+  useLetterKeys(Math.min(order.length, LETTERS.length), (i) => onNodeTap?.(order[i]), !!keys && !!interactive);
+  useNumberKeys(toggleOrder.length, (i) => onToggle?.(toggleOrder[i].node, toggleOrder[i].label), !!keys && toggleOrder.length > 0);
 
   // ----- packet animation -----
   const [packet, setPacket] = useState<{ pts: Pt[]; failed: boolean; key: number } | null>(null);
@@ -353,7 +372,8 @@ export default function ServerMap(props: ServerMapProps) {
                     aria-label={`${n.label}: ${ROLE[n.kind]}. ${n.sub}`}
                     title={`${n.label}: ${n.sub}`}
                   >
-                    <span className="truncate text-[12.5px] font-semibold leading-tight">{n.label}</span>
+                    {nodeKey[n.id] && <OptionKey n={nodeKey[n.id]} small className="absolute right-1.5 top-1.5 bg-bg/60" />}
+                    <span className={`truncate text-[12.5px] font-semibold leading-tight ${nodeKey[n.id] ? "pr-5" : ""}`}>{n.label}</span>
                     <span className="mt-0.5 truncate text-[11.5px] leading-tight text-ink/70">{ROLE[n.kind]}</span>
                     <span className="mt-0.5 truncate font-mono text-[10px] leading-tight text-faint">{n.sub.split("\n")[0]}</span>
                   </button>
@@ -375,7 +395,10 @@ export default function ServerMap(props: ServerMapProps) {
                         x.on ? "border-teal/60 bg-teal/10 text-teal" : "border-red/60 bg-red/10 text-red"
                       }`}
                     >
-                      <span className="truncate">{x.label}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {toggleKey(x) && <OptionKey n={toggleKey(x)!} small tone="border-current text-current" className="opacity-80" />}
+                        <span className="truncate">{x.label}</span>
+                      </span>
                       <span className={`relative inline-block h-3 w-6 shrink-0 rounded-full ${x.on ? "bg-teal/70" : "bg-line2"}`}>
                         <span className={`absolute top-0.5 h-2 w-2 rounded-full bg-bg transition-all ${x.on ? "left-3.5" : "left-0.5"}`} />
                       </span>

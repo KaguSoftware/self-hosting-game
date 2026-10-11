@@ -15,7 +15,7 @@ import { useProgress } from "@/store/progress";
 import { useUi } from "@/store/ui";
 import { sfx } from "@/lib/sfx";
 import Terminal from "../terminal/Terminal";
-import { Btn, GoalList, HintBar, type TaskCallbacks } from "./common";
+import { Btn, GoalList, HintBar, KeyHint, OptionKey, useEnterKey, useNumberKeys, type TaskCallbacks } from "./common";
 
 export function incidentStartState(inc: Incident, vars: Record<string, string>) {
   const lvl = replay.levelById(inc.after)!;
@@ -92,6 +92,40 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
     usePlay.getState().setBusy(false);
   }
 
+  function takeCall() {
+    sfx.alarm();
+    useUi.getState().doShake();
+    started.current = Date.now();
+    setPhase("live");
+  }
+
+  const closed = useRef(false);
+  function closeIncident() {
+    if (!result || closed.current) return;
+    closed.current = true;
+    cb.onDone({
+      mistakes: failures,
+      usedHints: hintsUsed > 0,
+      usedShowMe,
+      missed: [],
+      bonusXp: Math.round(result.score / 10),
+      why: `Incident closed. Score ${result.score}.`,
+    });
+  }
+
+  function flip(c: NonNullable<Incident["controls"]>[number]) {
+    const w = usePlay.getState().state.world;
+    const on = isActionActive(w, c.on);
+    sfx.tap();
+    usePlay.getState().setWorld(applyMapAction(w, on ? c.off : c.on));
+  }
+
+  // Keyboard: Enter takes the call and later closes the incident (Ctrl+Enter from the
+  // terminal). Dashboard switches answer to 1, 2, 3 when you are not typing (Esc leaves the terminal).
+  useEnterKey(takeCall, phase === "call" && !done);
+  useEnterKey(closeIncident, phase === "fixed" && !!result && !done);
+  useNumberKeys(incident.controls?.length ?? 0, (i) => incident.controls && flip(incident.controls[i]), phase === "live" && !busy);
+
   if (phase === "call") {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="alarm space-y-4 rounded-xl border border-red/60 bg-reddim/20 p-5">
@@ -110,16 +144,9 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
         <p className="font-mono text-[12px] text-muted">
           Uptime drains while you work. Fewer test commands and a faster fix score higher. You have about {Math.round(incident.timeLimit / 60)} minutes.
         </p>
-        <Btn
-          kind="danger"
-          onClick={() => {
-            sfx.alarm();
-            useUi.getState().doShake();
-            started.current = Date.now();
-            setPhase("live");
-          }}
-        >
+        <Btn kind="danger" onClick={takeCall}>
           Take the call
+          <KeyHint>↵</KeyHint>
         </Btn>
       </motion.div>
     );
@@ -156,7 +183,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
         <div className="rounded-xl border border-line2 bg-panel p-3">
           <div className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted">Provider dashboard</div>
           <div className="flex flex-wrap gap-1.5">
-            {incident.controls.map((c) => {
+            {incident.controls.map((c, i) => {
               const on = isActionActive(state.world, c.on);
               return (
                 <button
@@ -164,19 +191,18 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
                   type="button"
                   disabled={phase !== "live" || busy}
                   aria-pressed={on}
-                  onClick={() => {
-                    sfx.tap();
-                    usePlay.getState().setWorld(applyMapAction(state.world, on ? c.off : c.on));
-                  }}
-                  className={`rounded-md border px-2.5 py-1 font-mono text-[12px] transition disabled:opacity-50 ${
+                  onClick={() => flip(c)}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-[12px] transition disabled:opacity-50 ${
                     on ? "border-ink bg-ink text-bg" : "border-line2 bg-panel2 text-ink hover:border-ink"
                   }`}
                 >
+                  {i < 9 && <OptionKey n={i + 1} small tone={on ? "border-bg/40 text-bg" : undefined} />}
                   {c.label}: {on ? "on" : "off"}
                 </button>
               );
             })}
           </div>
+          {phase === "live" && <p className="mt-2 hidden text-[11.5px] text-faint sm:block">Keys: press Esc to leave the terminal, then a switch&apos;s number to flip it.</p>}
         </div>
       )}
 
@@ -190,7 +216,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
       />
 
       {phase === "live" && (
-        <HintBar hints={incident.hints} failures={failures} onHint={() => setHintsUsed((h) => h + 1)} onShowMe={() => void showMe()} showMeLabel="Fix it for me" />
+        <HintBar terminal hints={incident.hints} failures={failures} onHint={() => setHintsUsed((h) => h + 1)} onShowMe={() => void showMe()} showMeLabel="Fix it for me" />
       )}
 
       <AnimatePresence>
@@ -228,20 +254,9 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
               ))}
             </ul>
             {!done && (
-              <Btn
-                kind="teal"
-                onClick={() =>
-                  cb.onDone({
-                    mistakes: failures,
-                    usedHints: hintsUsed > 0,
-                    usedShowMe,
-                    missed: [],
-                    bonusXp: Math.round(result.score / 10),
-                    why: `Incident closed. Score ${result.score}.`,
-                  })
-                }
-              >
+              <Btn kind="teal" onClick={closeIncident}>
                 Close the incident
+                <KeyHint>↵</KeyHint>
               </Btn>
             )}
           </motion.div>

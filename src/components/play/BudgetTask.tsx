@@ -1,11 +1,11 @@
 "use client";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Step, Task } from "@/content/schema";
 import { applyMapActions } from "@/sim/map";
 import { usePlay } from "@/store/play";
 import { sfx } from "@/lib/sfx";
-import { HintBar, type TaskCallbacks } from "./common";
+import { HintBar, OptionKey, useNumberKeys, type TaskCallbacks } from "./common";
 
 type T = Extract<Task, { kind: "budget" }>;
 
@@ -31,7 +31,10 @@ export default function BudgetTask({ step, task, cb, done }: { step: Step; task:
     setLoaded([...loaded, i]);
   }
 
+  const fired = useRef(false);
   function finish(showMe: boolean) {
+    if (fired.current) return;
+    fired.current = true;
     if (task.apply) usePlay.getState().setWorld(applyMapActions(usePlay.getState().state.world, task.apply));
     setTimeout(
       () =>
@@ -47,7 +50,7 @@ export default function BudgetTask({ step, task, cb, done }: { step: Step; task:
   }
 
   function pick(i: number) {
-    if (done || !allLoaded) return;
+    if (done || !allLoaded || fired.current) return;
     setPicked(i);
     const plan = task.plans[i];
     if (plan.ramMb < fullTotal) {
@@ -66,6 +69,10 @@ export default function BudgetTask({ step, task, cb, done }: { step: Step; task:
     cb.onCorrect();
     finish(false);
   }
+
+  // Keyboard: first 1, 2, 3 load the pieces, then (once all are loaded) 1, 2, 3 pick a plan.
+  useNumberKeys(task.pieces.length, load, !done && !allLoaded);
+  useNumberKeys(task.plans.length, pick, !done && allLoaded);
 
   return (
     <div className="space-y-4">
@@ -90,12 +97,15 @@ export default function BudgetTask({ step, task, cb, done }: { step: Step; task:
                   on ? "border-teal/50 bg-teal/[0.07]" : "border-line2 bg-panel2 hover:border-ink"
                 }`}
               >
-                <span className="min-w-0">
-                  <span className={`block text-[14px] font-medium ${on ? "text-teal" : "text-ink"}`}>
-                    {on ? "✓ " : ""}
-                    {p.name}
+                <span className="flex min-w-0 items-start gap-2.5">
+                  {!allLoaded && i < 9 && <OptionKey n={i + 1} className={on ? "invisible" : ""} />}
+                  <span className="min-w-0">
+                    <span className={`block text-[14px] font-medium ${on ? "text-teal" : "text-ink"}`}>
+                      {on ? "✓ " : ""}
+                      {p.name}
+                    </span>
+                    <span className="block text-[12.5px] text-muted">{p.note}</span>
                   </span>
-                  <span className="block text-[12.5px] text-muted">{p.note}</span>
                 </span>
                 <span className="shrink-0 font-mono text-[13px] text-ink/80">{gb(p.mb)}</span>
               </button>
@@ -123,7 +133,10 @@ export default function BudgetTask({ step, task, cb, done }: { step: Step; task:
                 } disabled:cursor-not-allowed`}
               >
                 <div className="flex items-baseline justify-between">
-                  <span className="text-[14px] font-semibold text-ink">{p.name}</span>
+                  <span className="flex items-center gap-2 text-[14px] font-semibold text-ink">
+                    {allLoaded && !done && i < 9 && <OptionKey n={i + 1} inline />}
+                    {p.name}
+                  </span>
                   <span className="font-mono text-[13px] text-ink">{p.price}</span>
                 </div>
                 <div className="mt-0.5 text-[12.5px] text-muted">

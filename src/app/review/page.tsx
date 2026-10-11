@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import TopBar from "@/components/TopBar";
-import { Btn, OptionKey, useNumberKeys } from "@/components/play/common";
+import { Btn, KeyHint, OptionKey, useEnterKey, useNumberKeys } from "@/components/play/common";
 import { QUIZ } from "@/content";
 import { dayKey, dueCards } from "@/engine/rules";
 import { useProgress } from "@/store/progress";
@@ -41,6 +42,11 @@ export default function ReviewPage() {
   }
 
   useNumberKeys(q?.options.length ?? 0, answer, !!q && pick === null);
+  // Enter: the next card once you have answered, and back to the path when the deck is done.
+  const router = useRouter();
+  const finished = hydrated && (!deck.length || i >= deck.length);
+  useEnterKey(() => next(), !!q && pick !== null);
+  useEnterKey(() => router.push("/"), finished);
 
   function next() {
     setPick(null);
@@ -64,6 +70,7 @@ export default function ReviewPage() {
             <p className="text-[15px]">Nothing due right now. Nice.</p>
             <Link href="/" className="mt-3 inline-block font-mono text-[13px] text-amber hover:underline">
               ← back to the path
+              <KeyHint>↵</KeyHint>
             </Link>
           </div>
         ) : i >= deck.length ? (
@@ -74,6 +81,7 @@ export default function ReviewPage() {
             <p className="mt-1 text-[14px] text-ink/80">Right answers move to longer gaps. Misses come back tomorrow.</p>
             <Link href="/" className="mt-4 inline-block rounded-lg bg-amber px-4 py-2 font-mono text-[13px] font-bold text-bg">
               Back to the path
+              <KeyHint>↵</KeyHint>
             </Link>
           </motion.div>
         ) : (
@@ -109,8 +117,9 @@ export default function ReviewPage() {
               {pick !== null && (
                 <>
                   <p className="text-[14px] text-ink/85">{q.why}</p>
-                  <Btn kind="teal" onClick={next}>
-                    Next
+                  <Btn kind="teal" onClick={next} autoFocus>
+                    {i + 1 < deck.length ? "Next" : "Finish"}
+                    <KeyHint>↵</KeyHint>
                   </Btn>
                 </>
               )}

@@ -130,6 +130,11 @@ button:disabled {
     outline: 2px solid var(--color-ink);
     outline-offset: 2px;
   }
+  /* Tabbing scrolls focused things clear of the sticky headers. */
+  html {
+    scroll-padding-top: 128px;
+    scroll-padding-bottom: 72px;
+  }
 }
 
 /* Brand mark. The status light blinks like a real server: a quick flicker now and then when healthy, a slow pulse when down. */
