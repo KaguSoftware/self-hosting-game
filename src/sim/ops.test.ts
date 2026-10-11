@@ -88,6 +88,37 @@ describe("rclone", () => {
   });
 });
 
+describe("logs fill the disk", () => {
+  it("unlimited logs crash Postgres, and logging limits plus up -d recover", () => {
+    const s = server();
+    const full = produce(s.w, (d) => {
+      const app = Object.values(d.hosts.vps.docker.containers).find((c) => c.service === "app")!;
+      app.logBytes = 40 * 1024 ** 3;
+    });
+    let r = run({ ...s, w: full }, ["df -h", "sleep 10", "cd /srv/crumb", "docker compose logs --tail 3 db", "sudo du -sh /var/lib/docker/containers/*", VARS.deployPassword]);
+    expect(r.text).toMatch(/100% \//);
+    expect(r.text).toContain("No space left on device");
+    const db = Object.values(r.w.hosts.vps.docker.containers).find((c) => c.service === "db")!;
+    expect(db.status).not.toBe("running");
+    // Cap every service's log, then recreate so the new limits apply.
+    r = {
+      ...r,
+      w: produce(r.w, (d) => {
+        const f = getFile(d.hosts.vps, "/srv/crumb/compose.yaml")!;
+        f.content = f.content.replace(/(\n  (app|db):\n)/g, `$1    logging:\n      driver: json-file\n      options:\n        max-size: 10m\n        max-file: "3"\n`);
+      }),
+    };
+    // Recreating alone deadlocks: db is recreated first, but the old app log still fills the disk.
+    const stuck = run(r, ["docker compose up -d"]);
+    expect(stuck.text).toContain("dependency failed to start");
+    // Free the space first, then recreate.
+    r = run(r, ["sudo truncate -s 0 $(docker inspect --format '{{.LogPath}}' crumb-app-1)", "docker compose up -d", "sleep 60", "df -h"]);
+    expect(r.text).not.toMatch(/100% \//);
+    const db2 = Object.values(r.w.hosts.vps.docker.containers).find((c) => c.service === "db")!;
+    expect(db2.status).toBe("running");
+  });
+});
+
 describe("reboot", () => {
   it("brings back services and containers by restart policy, and drops ssh", () => {
     const s = server();

@@ -128,6 +128,8 @@ export interface Container {
   imageId?: string;
   /** Compose depends_on, kept for ordering on down and restart. */
   dependsOn?: string[];
+  /** Size of the container's log file on the server. It grows while running unless logging options cap it. */
+  logBytes?: number;
   /** Caddy: the Caddyfile text it loaded at start or last good reload. Editing the file changes nothing until then. */
   caddyConfig?: string;
 }

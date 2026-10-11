@@ -1,4 +1,5 @@
 import { buildImage } from "../../docker/dockerfile";
+import { logPath } from "../../docker/logs";
 import { loadCompose, containerName } from "../../docker/compose";
 import { execIn, metaOf } from "../../docker/behaviour";
 import { commandOf, commandText, fullId, humanDuration, portsText, shortId, statusText, table } from "../../docker/format";
@@ -709,6 +710,7 @@ function containerJson(ctx: Ctx, c: Container): Record<string, unknown> {
       ...(health ? { Health: health } : {}),
     },
     Image: `sha256:${img?.id ?? c.imageId ?? ""}${hashHex("img" + (img?.id ?? c.imageId ?? ""), 52)}`,
+    LogPath: logPath(c),
     Name: `/${c.name}`,
     RestartCount: c.restartCount ?? 0,
     HostConfig: {

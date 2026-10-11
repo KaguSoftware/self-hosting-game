@@ -1,4 +1,5 @@
 import { nodeSize, userGroups } from "../../fs";
+import { containerLogsMb, diskSizeMb, setDiskUsage } from "../../docker/logs";
 import { listeners } from "../../net";
 import { dateTime, hhmmss, strftime } from "../../time";
 import type { Host } from "../../types";
@@ -173,9 +174,9 @@ export function diskUsedMb(host: Host): number {
   const files = nodeSize(host.fs) / (1024 * 1024);
   const images = Object.values(host.docker.images).reduce((s, i) => s + i.sizeMb, 0);
   const volumes = Object.values(host.docker.volumes).reduce((s, v) => s + v.sizeMb, 0);
-  const logs = Object.values(host.docker.containers).reduce((s, c) => s + c.logs.length * 0.0002, 0);
-  return host.baseUsedMb + files + images + volumes + logs;
+  return host.baseUsedMb + files + images + volumes + containerLogsMb(host);
 }
+setDiskUsage(diskUsedMb);
 
 function g(mb: number): string {
   if (mb >= 1024) {
@@ -190,7 +191,7 @@ export const df: Command = {
   summary: "disk space (df -h)",
   run(ctx) {
     const human = ctx.argv.some((a) => a.includes("h"));
-    const size = ctx.host.diskGb * 1024 - 1600;
+    const size = diskSizeMb(ctx.host);
     const used = Math.min(size, diskUsedMb(ctx.host));
     const avail = Math.max(0, size - used);
     const pct = Math.round((used / size) * 100);

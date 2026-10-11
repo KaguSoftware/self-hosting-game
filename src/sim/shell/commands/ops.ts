@@ -1,6 +1,7 @@
 // Scheduling, offsite copies and reboots: crontab, rclone, reboot.
 import { CRONTAB_TEMPLATE, installCrontab, userCrontab } from "../../cron";
-import { basename, file, getDir, getFile, put, writeFile } from "../../fs";
+import { basename, file, getDir, getFile, getNode, nodeSize, put, writeFile } from "../../fs";
+import { logBytes, logPath } from "../../docker/logs";
 import { advance } from "../../tick";
 import { lsTime } from "../../time";
 import type { Host, World } from "../../types";
@@ -250,4 +251,89 @@ export const reboot: Command = {
   },
 };
 
-export const OPS_COMMANDS = [crontab, rclone, reboot];
+// ---------- du ----------
+
+function human(bytes: number): string {
+  const units = ["K", "M", "G", "T"];
+  let v = bytes / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v < 10 && i > 0 ? v.toFixed(1) : Math.max(1, Math.round(v))}${units[i]}`;
+}
+
+export const du: Command = {
+  name: "du",
+  summary: "how big folders are (sudo du -sh /var/lib/docker/containers/*)",
+  run(ctx) {
+    const { flags, args } = flagSet(ctx.argv.slice(1));
+    const h = flags.has("h");
+    const show = (bytes: number, p: string) => `${h ? human(bytes) : Math.max(1, Math.round(bytes / 1024))}\t${p}`;
+    const lines: string[] = [];
+    let code = 0;
+    for (const raw of args.length ? args : ["."]) {
+      const p = ctx.path(raw.replace(/\/\*$/, ""));
+      if (p.startsWith("/var/lib/docker")) {
+        if (ctx.user !== "root") {
+          ctx.err(`du: cannot read directory '/var/lib/docker': Permission denied`);
+          code = 1;
+          continue;
+        }
+        const cs = Object.values(ctx.host.docker.containers);
+        if (raw.endsWith("/*") && p === "/var/lib/docker/containers") {
+          for (const c of cs) lines.push(show(logBytes(c) + 24 * 1024, `/var/lib/docker/containers/${c.id}`));
+        } else lines.push(show(cs.reduce((s, c) => s + logBytes(c) + 24 * 1024, 0), p));
+        continue;
+      }
+      const node = getNode(ctx.host, p);
+      if (!node) {
+        ctx.err(`du: cannot access '${raw}': No such file or directory`);
+        code = 1;
+        continue;
+      }
+      lines.push(show(nodeSize(node), raw));
+    }
+    if (lines.length) ctx.out(lines.join("\n"));
+    return code;
+  },
+};
+
+export const truncate: Command = {
+  name: "truncate",
+  summary: "cut a file to a size (sudo truncate -s 0 FILE empties it)",
+  run(ctx) {
+    const si = ctx.argv.indexOf("-s");
+    const size = si >= 0 ? ctx.argv[si + 1] : undefined;
+    const target = ctx.argv.slice(1).filter((a, i, all) => !a.startsWith("-") && all[i - 1] !== "-s")[0];
+    if (size !== "0" || !target) {
+      ctx.err(size === undefined ? "truncate: you must specify either '--size' or '--reference'" : "truncate: in this game, only -s 0 (empty the file) is supported");
+      return 1;
+    }
+    const path = ctx.path(target);
+    if (path.startsWith("/var/lib/docker/")) {
+      if (ctx.user !== "root") {
+        ctx.err(`truncate: cannot open '${target}' for writing: Permission denied`);
+        return 1;
+      }
+      const c = Object.values(ctx.host.docker.containers).find((x) => logPath(x) === path);
+      if (!c) {
+        ctx.err(`truncate: cannot open '${target}' for writing: No such file or directory`);
+        return 1;
+      }
+      c.logBytes = 0;
+      return 0;
+    }
+    const f = getFile(ctx.host, path);
+    if (!f) {
+      put(ctx.host, path, file("", 0o644, ctx.user, ctx.user));
+      return 0;
+    }
+    f.content = "";
+    f.padBytes = 0;
+    return 0;
+  },
+};
+
+export const OPS_COMMANDS = [crontab, rclone, reboot, du, truncate];

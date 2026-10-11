@@ -15,6 +15,8 @@ import type { Command } from "./ctx";
 import "../docker/caddy";
 // Registers the cron scheduler with the sim clock.
 import "../cron";
+// Registers container log growth (and the disk filling up).
+import "../docker/logs";
 
 const GROUPS: [string, Command[]][] = [
   ["Files", FILE_COMMANDS],
