@@ -7,59 +7,6 @@ import { sfx } from "@/lib/sfx";
 
 type Pt = { x: number; y: number };
 
-const H_SLOTS: Record<string, Pt> = {
-  client: { x: 7, y: 24 },
-  laptop: { x: 7, y: 74 },
-  dns: { x: 22, y: 24 },
-  pfw: { x: 37, y: 50 },
-  ufw: { x: 53, y: 50 },
-  caddy: { x: 66, y: 24 },
-  app: { x: 79, y: 24 },
-  db: { x: 92, y: 24 },
-  sshd: { x: 66, y: 74 },
-};
-const H_EXTRA: Pt[] = [
-  { x: 79, y: 74 },
-  { x: 92, y: 74 },
-  { x: 92, y: 50 },
-  { x: 79, y: 50 },
-  { x: 66, y: 50 },
-];
-const V_SLOTS: Record<string, Pt> = {
-  client: { x: 26, y: 5 },
-  laptop: { x: 74, y: 5 },
-  dns: { x: 26, y: 17 },
-  pfw: { x: 50, y: 29 },
-  ufw: { x: 50, y: 44 },
-  caddy: { x: 27, y: 57 },
-  sshd: { x: 73, y: 57 },
-  app: { x: 27, y: 70 },
-  db: { x: 27, y: 84 },
-};
-const V_EXTRA: Pt[] = [
-  { x: 73, y: 70 },
-  { x: 73, y: 84 },
-  { x: 50, y: 94 },
-  { x: 27, y: 94 },
-  { x: 73, y: 94 },
-];
-
-const GLYPH: Record<MapNode["kind"], string> = {
-  client: "WWW",
-  laptop: "~$",
-  dns: "DNS",
-  pfw: "FW",
-  vps: "VPS",
-  ufw: "ufw",
-  sshd: "SSH",
-  caddy: "443",
-  app: "APP",
-  db: "PG",
-  svc: "SVC",
-  volume: "VOL",
-  gitlab: "GIT",
-};
-
 export interface MapToggle {
   node: string;
   label: string;
@@ -83,27 +30,6 @@ export interface ServerMapProps {
   title?: string;
 }
 
-function layout(nodes: MapNode[], vertical: boolean): Record<string, Pt> {
-  const slots = vertical ? V_SLOTS : H_SLOTS;
-  const extra = (vertical ? V_EXTRA : H_EXTRA).slice();
-  const out: Record<string, Pt> = {};
-  for (const n of nodes) {
-    if (n.id === "vps") continue;
-    if (slots[n.id]) out[n.id] = slots[n.id];
-  }
-  const taken = new Set(Object.values(out).map((p) => `${p.x},${p.y}`));
-  for (const n of nodes) {
-    if (n.id === "vps" || out[n.id]) continue;
-    let p = extra.shift();
-    while (p && taken.has(`${p.x},${p.y}`)) p = extra.shift();
-    if (p) {
-      out[n.id] = p;
-      taken.add(`${p.x},${p.y}`);
-    }
-  }
-  return out;
-}
-
 /** Plain-English job of each box, for people new to all this. */
 const ROLE: Record<MapNode["kind"], string> = {
   client: "someone's browser",
@@ -123,78 +49,225 @@ const ROLE: Record<MapNode["kind"], string> = {
 
 const statusClass: Record<MapNode["status"], string> = {
   ok: "border-line2 bg-panel2 text-ink",
-  off: "border-dashed border-line2 bg-panel/70 text-muted",
+  off: "border-dashed border-line2 bg-panel text-muted",
   warn: "border-line2 bg-panel2 text-ink",
   down: "border-red/80 bg-reddim/40 text-ink",
-  ghost: "border-dashed border-line bg-transparent text-faint",
+  ghost: "border-dashed border-line bg-bg2 text-faint",
 };
+
+// ---------- pixel layout ----------
+// Everything is measured in px from the real width, so padding never depends on the screen.
+
+const NODE_H = 64;
+const TOGGLE_H = 30;
+const TAG_H = 20;
+
+interface Box {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface Layout {
+  /** Top-left corner of each node box, px. */
+  at: Record<string, Pt>;
+  /** Node width, px (per node, since outside and inside columns differ). */
+  w: Record<string, number>;
+  height: number;
+  vps: Box;
+}
+
+type Slot = { id: string; col: "L" | "R" | "M" } | null;
+
+function extraIds(nodes: MapNode[]): string[] {
+  const fixed = new Set(["client", "laptop", "dns", "pfw", "vps", "ufw", "sshd", "caddy", "app", "db"]);
+  return nodes.filter((n) => !fixed.has(n.id)).map((n) => n.id);
+}
+
+function verticalLayout(nodes: MapNode[], W: number, rented: boolean, extraH: (id: string) => number): Layout {
+  const pad = 12;
+  const gap = 10;
+  const rowGap = 18;
+  const boxPad = 12;
+  const boxLabel = 14;
+  const has = new Set(nodes.map((n) => n.id));
+  const at: Record<string, Pt> = {};
+  const w: Record<string, number> = {};
+  const outW = (W - 2 * pad - gap) / 2;
+  const inW = (W - 2 * pad - 2 * boxPad - gap) / 2;
+  const colX = (col: "L" | "R" | "M", inside: boolean) => {
+    const cw = inside ? inW : outW;
+    const left = pad + (inside ? boxPad : 0);
+    if (col === "L") return left;
+    if (col === "R") return W - left - cw;
+    return (W - cw) / 2;
+  };
+  let y = pad;
+  const placeRow = (slots: Slot[], inside: boolean) => {
+    const real = slots.filter((s): s is NonNullable<Slot> => !!s && has.has(s.id));
+    if (!real.length) return;
+    const h = NODE_H + Math.max(...real.map((s) => extraH(s.id)));
+    for (const s of real) {
+      at[s.id] = { x: colX(s.col, inside), y };
+      w[s.id] = inside ? inW : outW;
+    }
+    y += h + rowGap;
+  };
+  placeRow([{ id: "client", col: "L" }, { id: "laptop", col: "R" }], false);
+  placeRow([{ id: "dns", col: "L" }], false);
+  placeRow([{ id: "pfw", col: "M" }], false);
+  const boxTop = y;
+  y += boxPad + boxLabel;
+  if (rented) {
+    const extras = extraIds(nodes);
+    placeRow([{ id: "ufw", col: "M" }], true);
+    placeRow([{ id: "caddy", col: "L" }, { id: "sshd", col: "R" }], true);
+    const nextExtra = (): Slot => {
+      const id = extras.shift();
+      return id ? { id, col: "R" } : null;
+    };
+    placeRow([{ id: "app", col: "L" }, nextExtra()], true);
+    placeRow([{ id: "db", col: "L" }, nextExtra()], true);
+    while (extras.length) {
+      const a = extras.shift()!;
+      const b = extras.shift();
+      placeRow([{ id: a, col: "L" }, b ? { id: b, col: "R" } : null], true);
+    }
+    y = y - rowGap + boxPad;
+  } else {
+    y += 56;
+  }
+  const vps = { left: pad, top: boxTop, width: W - 2 * pad, height: y - boxTop };
+  return { at, w, height: y + pad, vps };
+}
+
+function horizontalLayout(nodes: MapNode[], W: number, rented: boolean, extraH: (id: string) => number): Layout {
+  const pad = 16;
+  const gap = 14;
+  const boxPad = 14;
+  const boxLabel = 14;
+  const rowGap = 26;
+  const colW = (W - 2 * pad - 6 * gap - 2 * boxPad) / 7;
+  const colX = (i: number) => pad + i * (colW + gap) + (i >= 3 ? boxPad : 0);
+  const has = new Set(nodes.map((n) => n.id));
+  const at: Record<string, Pt> = {};
+  const w: Record<string, number> = {};
+  const extras = extraIds(nodes);
+
+  // Rows: 0 = top, 1 = middle, 2 = bottom, 3+ = overflow. Cells are [column, id].
+  const rows: [number, string][][] = [
+    [
+      [0, "client"],
+      [1, "dns"],
+      [4, "caddy"],
+      [5, "app"],
+      [6, "db"],
+    ],
+    [
+      [2, "pfw"],
+      [3, "ufw"],
+    ],
+    [
+      [0, "laptop"],
+      [4, "sshd"],
+    ],
+  ];
+  if (rented) {
+    for (const col of [5, 6, 3]) {
+      const id = extras.shift();
+      if (id) rows[2].push([col, id]);
+    }
+    while (extras.length) {
+      const row: [number, string][] = [];
+      for (const col of [3, 4, 5, 6]) {
+        const id = extras.shift();
+        if (id) row.push([col, id]);
+      }
+      rows.push(row);
+    }
+  }
+  const boxTop = pad;
+  let y = boxTop + boxPad + boxLabel;
+  for (const row of rows) {
+    const real = row.filter(([, id]) => has.has(id) && (rented || ["client", "dns", "laptop"].includes(id)));
+    const h = NODE_H + Math.max(0, ...real.map(([, id]) => extraH(id)));
+    for (const [col, id] of real) {
+      at[id] = { x: colX(col), y };
+      w[id] = colW;
+    }
+    y += h + rowGap;
+  }
+  y = y - rowGap + boxPad;
+  const vps = { left: colX(3) - boxPad, top: boxTop, width: W - pad - (colX(3) - boxPad), height: y - boxTop };
+  return { at, w, height: y + pad, vps };
+}
 
 export default function ServerMap(props: ServerMapProps) {
   const { world, trace, traceKey = 0, interactive, onNodeTap, flash, tags, toggles, onToggle, done, forceVertical, className, title } = props;
   const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(800);
+  const [width, setWidth] = useState(0);
   const reduced = useReducedMotion();
 
   useEffect(() => {
     if (!ref.current) return;
+    setWidth(ref.current.clientWidth);
     const ro = new ResizeObserver((e) => setWidth(e[0].contentRect.width));
     ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
 
-  const vertical = forceVertical || width < 620;
+  const W = width || 360;
+  const vertical = forceVertical || W < 760;
   const model = useMemo(() => deriveMap(world), [world]);
-  // Vertical maps only take the height they need: y values are units of a 100-unit-tall map,
-  // and the map is cut off just below the lowest box.
-  const { pos, units } = useMemo(() => {
-    const raw = layout(model.nodes, vertical);
-    if (!vertical) return { pos: raw, units: 100 };
-    const maxY = Math.max(17, ...Object.values(raw).map((p) => p.y));
-    const u = Math.min(100, Math.max(model.nodes.length > 3 ? 62 : 56, maxY + 9));
-    const scaled: Record<string, Pt> = {};
-    for (const [k, p] of Object.entries(raw)) scaled[k] = { x: p.x, y: (p.y / u) * 100 };
-    return { pos: scaled, units: u };
-  }, [model, vertical]);
-  const vpsNode = model.nodes.find((n) => n.id === "vps");
   const rented = world.provider.rented;
+  const vpsNode = model.nodes.find((n) => n.id === "vps");
+
+  const extraH = (id: string) =>
+    (toggles?.filter((t) => t.node === id).length ?? 0) * TOGGLE_H + (tags !== undefined && (tags[id]?.length || interactive) ? TAG_H : 0);
+
+  const L = useMemo(
+    () => (vertical ? verticalLayout(model.nodes, W, rented, extraH) : horizontalLayout(model.nodes, W, rented, extraH)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model, W, vertical, rented, toggles?.length, tags ? Object.keys(tags).join() : "", interactive],
+  );
+
+  /** Centre of a node box in % of the map, for edges and the packet. */
+  const center = (id: string): Pt | undefined => {
+    const p = L.at[id];
+    if (!p) return undefined;
+    return { x: ((p.x + L.w[id] / 2) / W) * 100, y: ((p.y + NODE_H / 2) / L.height) * 100 };
+  };
+  const vpsCenter: Pt = { x: ((L.vps.left + L.vps.width / 2) / W) * 100, y: ((L.vps.top + L.vps.height / 2) / L.height) * 100 };
 
   // ----- packet animation -----
-  const [packet, setPacket] = useState<{ pts: Pt[]; failed: boolean; key: number; note: string; at: string; status?: number } | null>(null);
-  const [bubble, setBubble] = useState<{ at: string; text: string; ok: boolean } | null>(null);
+  const [packet, setPacket] = useState<{ pts: Pt[]; failed: boolean; key: number } | null>(null);
+  const [result, setResult] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     if (!trace || !traceKey) return;
     const pts: Pt[] = [];
-    let lastNode = "";
     for (const h of trace.hops) {
-      const node = h.node === "vps" ? null : h.node;
-      const p = node ? pos[node] : undefined;
-      if (!p && h.node === "vps") {
-        pts.push(vertical ? { x: 50, y: (70 / units) * 100 } : { x: 74, y: 50 });
-        lastNode = "vps";
-      } else if (p) {
-        pts.push(p);
-        lastNode = h.node;
-      }
+      const p = h.node === "vps" ? vpsCenter : center(h.node);
+      if (p) pts.push(p);
       if (!h.ok) break;
     }
     if (!pts.length) return;
     const failedHop = trace.hops.find((h) => !h.ok);
-    setBubble(null);
-    setPacket({ pts, failed: !trace.ok, key: traceKey, note: failedHop?.note ?? "", at: lastNode, status: trace.status });
+    setResult(null);
+    setPacket({ pts, failed: !trace.ok, key: traceKey });
     const per = reduced ? 0 : 260;
     pts.forEach((_, i) => {
       setTimeout(() => sfx.hop(i < pts.length - 1 || trace.ok), i * per);
     });
     const t = setTimeout(
       () => {
-        setBubble({
-          at: lastNode,
+        setResult({
           ok: trace.ok,
           text: trace.ok
             ? trace.kind === "ssh"
-              ? "✓ logged in"
-              : `✓ ${trace.status ?? 200}`
+              ? "✓ Logged in"
+              : `✓ ${trace.status ?? 200}: the request made it`
             : `✕ ${failedHop?.note ?? "failed"}${trace.status ? ` (${trace.status})` : ""}`,
         });
         if (!trace.ok) sfx.fail();
@@ -205,38 +278,32 @@ export default function ServerMap(props: ServerMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceKey]);
 
-  const aspectStyle = vertical ? { aspectRatio: `4 / ${(7 * units) / 100}` } : { aspectRatio: "1000 / 520" };
-  const vpsBox = vertical ? { left: 4, top: (37 / units) * 100, width: 92, height: ((units - 38) / units) * 100 } : { left: 46.5, top: 8, width: 52, height: 84 };
+  const pct = (v: number, of: number) => `${(v / of) * 100}%`;
 
   return (
-    <div ref={ref} className={`relative w-full ${className ?? ""}`}>
-      {title && <div className="mb-1.5 text-[12px] text-muted">{title}</div>}
-      <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg2/80" style={aspectStyle}>
+    <div ref={ref} data-map className={`relative w-full ${className ?? ""}`}>
+      {title && <div className="mb-2 text-[12px] text-muted">{title}</div>}
+      <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg2/80" style={{ height: L.height }}>
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(var(--color-line2)_1px,transparent_1px),linear-gradient(90deg,var(--color-line2)_1px,transparent_1px)] [background-size:24px_24px]" />
-        {/* VPS box */}
+
+        {/* the server outline */}
         <div
-          className={`absolute rounded-xl border ${rented ? "border-line2 bg-white/[0.015]" : "border-dashed border-line"} `}
-          style={{ left: `${vpsBox.left}%`, top: `${vpsBox.top}%`, width: `${vpsBox.width}%`, height: `${vpsBox.height}%` }}
+          className={`absolute rounded-xl border ${rented ? "border-line2 bg-white/[0.015]" : "border-dashed border-line"}`}
+          style={{ left: L.vps.left, top: L.vps.top, width: L.vps.width, height: L.vps.height }}
         >
-          <div className="absolute -top-2.5 left-3 bg-bg2 px-1.5 font-mono text-[11px] text-ink/80">
-            {vpsNode?.label ?? "server"} {rented && <span className="text-muted normal-case">· {vpsNode?.sub}</span>}
+          <div className="absolute -top-2.5 left-3 max-w-[calc(100%-24px)] truncate bg-bg2 px-1.5 font-mono text-[11px] text-ink/80">
+            {rented ? vpsNode?.label : "No server yet"}
+            {rented && <span className="text-muted"> · {vpsNode?.sub}</span>}
           </div>
-          {!rented && (
-            <div className="flex h-full items-center justify-center p-4 text-center text-[13px] text-faint">
-              No server yet.
-              <br />
-              You rent one in World 1.
-            </div>
-          )}
+          {!rented && <div className="flex h-full items-center justify-center px-4 pt-2 text-center text-[13px] text-faint">You rent one in World 1.</div>}
         </div>
 
         {/* edges */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
           {model.edges.map((e) => {
-            const a = pos[e.from];
-            const b = pos[e.to];
+            const a = center(e.from);
+            const b = center(e.to);
             if (!a || !b) return null;
-            const color = e.kind === "data" ? "var(--color-faint)" : "var(--color-muted)";
             return (
               <line
                 key={`${e.from}-${e.to}`}
@@ -244,7 +311,7 @@ export default function ServerMap(props: ServerMapProps) {
                 y1={a.y}
                 x2={b.x}
                 y2={b.y}
-                stroke={color}
+                stroke={e.kind === "data" ? "var(--color-faint)" : "var(--color-muted)"}
                 strokeOpacity={0.35}
                 strokeWidth={1.5}
                 strokeDasharray={e.kind === "data" ? "3 3" : e.kind === "ssh" ? "1 3" : undefined}
@@ -257,67 +324,59 @@ export default function ServerMap(props: ServerMapProps) {
         {/* nodes */}
         <AnimatePresence>
           {model.nodes
-            .filter((n) => n.id !== "vps" && pos[n.id])
+            .filter((n) => n.id !== "vps" && L.at[n.id])
             .map((n) => {
-              const p = pos[n.id];
+              const p = L.at[n.id];
               const f = flash && flash.id === n.id ? flash : null;
               const t = toggles?.filter((x) => x.node === n.id) ?? [];
               const isDone = done?.includes(n.id);
               return (
                 <motion.div
                   key={n.id}
-                  layout={!reduced}
-                  initial={{ opacity: 0, scale: 0.6 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.6 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                  className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: `${p.x}%`, top: `${p.y}%`, width: vertical ? "40%" : "12%", minWidth: 104 }}
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1, left: pct(p.x, W), top: p.y }}
+                  exit={{ opacity: 0, scale: 0.85 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  className="absolute z-10"
+                  style={{ width: L.w[n.id] }}
                 >
                   <button
                     type="button"
                     disabled={!interactive}
                     onClick={() => onNodeTap?.(n.id)}
-                    className={`group relative block w-full rounded-lg border px-2 py-1.5 text-left transition ${statusClass[n.status]} ${
+                    style={{ height: NODE_H }}
+                    className={`group relative flex w-full flex-col justify-center rounded-lg border px-2.5 text-left transition ${statusClass[n.status]} ${
                       interactive ? "hover:border-ink hover:bg-panel2 active:scale-[0.97]" : "cursor-default"
                     } ${f?.kind === "good" ? "!border-teal !bg-teal/10" : ""} ${f?.kind === "bad" ? "shake !border-red" : ""} ${
                       isDone ? "opacity-60" : ""
                     } ${n.status === "down" ? "animate-pulse" : ""}`}
-                    aria-label={`${n.label}: ${n.sub}`}
+                    aria-label={`${n.label}: ${ROLE[n.kind]}. ${n.sub}`}
+                    title={`${n.label}: ${n.sub}`}
                   >
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`font-mono text-[10px] font-bold leading-none ${n.status === "ok" ? "text-muted" : n.status === "down" ? "text-red" : "text-faint"}`}
-                      >
-                        {GLYPH[n.kind]}
-                      </span>
-                      <span className="truncate text-[12.5px] font-semibold">{n.label}</span>
-                    </div>
-                    <div className="mt-0.5 truncate text-[11.5px] leading-tight text-ink/70">{ROLE[n.kind]}</div>
-                    <div className="mt-0.5 line-clamp-1 whitespace-pre-line font-mono text-[10px] leading-tight text-faint" title={n.sub}>
-                      {n.sub}
-                    </div>
-                    {tags?.[n.id]?.length ? (
-                      <div className="mt-1 flex flex-wrap gap-0.5">
-                        {tags[n.id].map((tg) => (
-                          <span key={tg} className="rounded bg-teal/15 px-1.5 font-mono text-[10.5px] leading-4 text-teal">
-                            {tg}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
+                    <span className="truncate text-[12.5px] font-semibold leading-tight">{n.label}</span>
+                    <span className="mt-0.5 truncate text-[11.5px] leading-tight text-ink/70">{ROLE[n.kind]}</span>
+                    <span className="mt-0.5 truncate font-mono text-[10px] leading-tight text-faint">{n.sub.split("\n")[0]}</span>
                   </button>
+                  {tags?.[n.id]?.length ? (
+                    <div className="mt-1 flex h-4 flex-wrap gap-1 overflow-hidden">
+                      {tags[n.id].map((tg) => (
+                        <span key={tg} className="truncate rounded bg-teal/15 px-1.5 font-mono text-[10.5px] leading-4 text-teal">
+                          {tg}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {t.map((x) => (
                     <button
                       key={x.label}
                       type="button"
                       onClick={() => onToggle?.(x.node, x.label)}
-                      className={`mt-1 flex w-full items-center justify-between gap-1 rounded-md border px-2 py-1 text-[11.5px] transition ${
+                      className={`mt-1.5 flex h-6 w-full items-center justify-between gap-1 rounded-md border px-2 text-[11.5px] transition ${
                         x.on ? "border-teal/60 bg-teal/10 text-teal" : "border-red/60 bg-red/10 text-red"
                       }`}
                     >
                       <span className="truncate">{x.label}</span>
-                      <span className={`relative inline-block h-3 w-6 rounded-full ${x.on ? "bg-teal/70" : "bg-line2"}`}>
+                      <span className={`relative inline-block h-3 w-6 shrink-0 rounded-full ${x.on ? "bg-teal/70" : "bg-line2"}`}>
                         <span className={`absolute top-0.5 h-2 w-2 rounded-full bg-bg transition-all ${x.on ? "left-3.5" : "left-0.5"}`} />
                       </span>
                     </button>
@@ -334,27 +393,30 @@ export default function ServerMap(props: ServerMapProps) {
             className={`pointer-events-none absolute z-20 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${
               packet.failed ? "bg-red shadow-[0_0_12px_3px_rgba(248,86,78,0.6)]" : "bg-teal shadow-[0_0_12px_3px_rgba(62,207,116,0.6)]"
             }`}
-            initial={{ left: `${packet.pts[0].x}%`, top: `${packet.pts[0].y}%`, opacity: 1, scale: 1 }}
-            animate={{
-              left: packet.pts.map((p) => `${p.x}%`),
-              top: packet.pts.map((p) => `${p.y}%`),
-            }}
+            initial={{ left: `${packet.pts[0].x}%`, top: `${packet.pts[0].y}%` }}
+            animate={{ left: packet.pts.map((p) => `${p.x}%`), top: packet.pts.map((p) => `${p.y}%`) }}
             transition={{ duration: reduced ? 0 : Math.max(0.3, (packet.pts.length - 1) * 0.26), ease: "linear" }}
           />
         )}
-        {bubble && pos[bubble.at] && (
+      </div>
+
+      {/* what happened to the last request, under the map so it never covers a box */}
+      <AnimatePresence mode="wait">
+        {result && (
           <motion.div
-            key={`b-${traceKey}`}
-            initial={{ opacity: 0, y: 6 }}
+            key={`r-${traceKey}`}
+            initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`absolute bottom-2 left-2 right-2 z-30 rounded-md border px-2 py-1.5 font-mono text-[11px] leading-snug shadow-lg ${
-              bubble.ok ? "border-teal/60 bg-bg text-teal" : "border-red/70 bg-bg text-red"
+            exit={{ opacity: 0 }}
+            className={`mt-2 rounded-lg border px-3 py-2 font-mono text-[12px] leading-snug ${
+              result.ok ? "border-teal/50 bg-teal/[0.06] text-teal" : "border-red/60 bg-red/[0.06] text-red"
             }`}
+            role="status"
           >
-            {bubble.text}
+            {result.text}
           </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

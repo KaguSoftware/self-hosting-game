@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import { LEVELS, UPCOMING, WORLDS } from "@/content";
 import type { WorldDef } from "@/content/schema";
 import TopBar from "@/components/TopBar";
@@ -16,6 +16,26 @@ export default function Home() {
   const firstOpen = LEVELS.findIndex((l) => !completed[l.id]);
   const unlocked = (i: number) => i === 0 || LEVELS[i].id === "w0-01" || !!completed[LEVELS[i].id] || !!completed[LEVELS[i - 1].id];
   const doneCount = Object.keys(completed).length;
+
+  // "Jump to your level": a floating button that shows when the current level is off screen.
+  const currentRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const [where, setWhere] = useState<"visible" | "above" | "below">("visible");
+  useEffect(() => {
+    const el = currentRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([e]) => setWhere(e.isIntersecting ? "visible" : e.boundingClientRect.top < 0 ? "above" : "below"),
+      { rootMargin: "-60px 0px 0px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [firstOpen, hydrated]);
+
+  function jumpToCurrent() {
+    sfx.tap();
+    currentRef.current?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+  }
 
   return (
     <>
@@ -102,7 +122,13 @@ export default function Home() {
                     </motion.div>
                   );
                   return (
-                    <div key={l.id} className="flex flex-col items-center" style={{ transform: `translateX(${offset}px)` }}>
+                    <div
+                      key={l.id}
+                      ref={isCurrent ? currentRef : undefined}
+                      id={isCurrent ? "current-level" : undefined}
+                      className="flex flex-col items-center"
+                      style={{ transform: `translateX(${offset}px)` }}
+                    >
                       {isCurrent && (
                         <motion.div animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 1.6 }} className="mb-1 rounded-md bg-amber px-2 py-0.5 font-mono text-[11px] font-bold text-bg">
                           {doneCount === 0 ? "START" : "NEXT"}
@@ -137,6 +163,24 @@ export default function Home() {
           </section>
         ))}
       </main>
+
+      <AnimatePresence>
+        {hydrated && firstOpen >= 0 && where !== "visible" && (
+          <motion.button
+            type="button"
+            onClick={jumpToCurrent}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.18 }}
+            className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[14px] font-semibold text-bg shadow-[0_8px_24px_-6px_rgba(0,0,0,0.7)] hover:bg-white sm:left-auto sm:right-6 sm:translate-x-0"
+            aria-label={`Jump to your current level: ${LEVELS[firstOpen].title}`}
+          >
+            <span aria-hidden>{where === "above" ? "↑" : "↓"}</span>
+            Jump to your level
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {sheet && (

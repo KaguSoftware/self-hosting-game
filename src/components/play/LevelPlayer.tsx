@@ -258,7 +258,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
       </AnimatePresence>
 
       <div className={`grid flex-1 items-start gap-6 ${showSideMap ? "lg:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
-        <main className={`min-w-0 space-y-4 ${showSideMap ? "" : t.kind === "map" ? "mx-auto w-full max-w-5xl" : "mx-auto w-full max-w-3xl"}`}>
+        <main className={`min-w-0 space-y-4 ${showSideMap ? "" : t.kind === "map" ? "mx-auto w-full max-w-6xl" : "mx-auto w-full max-w-3xl"}`}>
           <motion.div key={step.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}>
             <MissionCard step={step} index={stepIdx} total={level.steps.length} />
           </motion.div>
