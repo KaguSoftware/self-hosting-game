@@ -1,6 +1,7 @@
 // The whole simulated universe. Pure data, no functions, so it can be
 // cloned, snapshotted, replayed and compared in tests.
 import type { PgDatabase, PgRole, PgTunnel } from "./pg/types";
+import type { GitLabState } from "./gitlab/types";
 
 export type HostId = "laptop" | "vps";
 
@@ -221,6 +222,8 @@ export interface World {
   storage?: { buckets: Record<string, Record<string, { content: string; sizeBytes: number; at: number }>> };
   /** Open SSH tunnels from the laptop (ssh -L). */
   tunnels?: PgTunnel[];
+  /** The GitLab project, its CI/CD and the laptop's clone (World 9). */
+  gitlab?: GitLabState;
 }
 
 // ---------- docker ----------
@@ -257,6 +260,8 @@ export interface ImageMeta {
   /** Built here with docker build, not pulled. */
   built?: boolean;
   digest?: string;
+  /** Commit the image was built from (the OCI revision label CI sets). */
+  revision?: string;
 }
 
 /** The Postgres data inside a volume, written on first start. */

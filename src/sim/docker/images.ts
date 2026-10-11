@@ -1,6 +1,7 @@
 // Images: the remote catalog (Docker Hub and the GitLab registry) and pulling into a host.
 import type { AppKind, Host, ImageMeta, RegistryImage, World } from "../types";
 import { hashHex } from "../util";
+import { pullAuthError } from "./auth";
 
 export interface RemoteImage extends RegistryImage {
   ageDays: number;
@@ -192,7 +193,8 @@ export function findRemote(w: World, ref: string): RemoteImage | undefined {
   const extra = w.registry?.[n];
   if (extra) return { ageDays: 1, layers: 6, meta: {}, ...extra };
   if (REMOTE_IMAGES[n]) return REMOTE_IMAGES[n];
-  if (repoOf(n) === APP_REPO && /^[\w.-]+$/.test(tagOf(n))) return appImage(tagOf(n));
+  // With a GitLab project in the world, only tags CI really pushed exist.
+  if (repoOf(n) === APP_REPO && !w.gitlab && /^[\w.-]+$/.test(tagOf(n))) return appImage(tagOf(n));
   return undefined;
 }
 
@@ -232,6 +234,8 @@ export interface PullResult {
 /** Pull `ref` into the host. Prints Docker 27 style lines. */
 export function pullImage(w: World, host: Host, ref: string): PullResult {
   const n = normalizeRef(ref);
+  const denied = pullAuthError(w, host, n);
+  if (denied) return { ok: false, lines: [], error: denied, fresh: false, layers: [] };
   const remote = findRemote(w, n);
   if (!remote) {
     const repo = repoOf(n);

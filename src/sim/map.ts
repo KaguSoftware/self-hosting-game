@@ -3,8 +3,11 @@ import { produce } from "immer";
 import { listeners } from "./net";
 import { runningSshd } from "./sshd";
 import { getFile } from "./fs";
-import type { World } from "./types";
+import type { HostId, World } from "./types";
 import { rentVps } from "./worlds";
+import { latestPipeline, deployTokenValue, defaultRunner } from "./gitlab/state";
+import { nudgePipelines, playJob, retryJob } from "./gitlab/pipeline";
+import { keyBody } from "./sshAuth";
 
 export type NodeStatus = "ok" | "off" | "warn" | "down" | "ghost";
 
@@ -48,6 +51,21 @@ export function deriveMap(w: World): MapModel {
     status: aRecords.length ? (aRecords.some((r) => r.type === "A" && r.value !== vps.publicIp) ? "warn" : "ok") : "ghost",
   });
   edges.push({ from: "client", to: "dns", kind: "web" });
+
+  const gl = w.gitlab;
+  if (gl) {
+    const p = latestPipeline(gl);
+    const online = gl.runners.some((r) => r.online);
+    const word: Record<string, string> = { success: "passed", failed: "failed", running: "running", pending: "pending", created: "created", manual: "waiting for a manual job", canceled: "canceled", skipped: "skipped" };
+    nodes.push({
+      id: "gitlab",
+      kind: "gitlab",
+      label: "GitLab",
+      sub: `${gl.project.path}${p ? ` · pipeline #${p.id} ${word[p.status]}` : " · no pipelines yet"}${online ? "" : " · no runner online"}`,
+      status: !p ? (online ? "ok" : "warn") : p.status === "success" ? "ok" : p.status === "failed" || p.status === "canceled" ? "down" : "warn",
+    });
+    edges.push({ from: "laptop", to: "gitlab", kind: "ssh" });
+  }
 
   if (!rented) {
     nodes.push({ id: "vps", kind: "vps", label: "No server yet", sub: "rent one in World 1", status: "ghost" });
@@ -130,6 +148,7 @@ export function deriveMap(w: World): MapModel {
     const userNode = nodes.find((n) => n.ref === user?.name);
     if (userNode) edges.push({ from: userNode.id, to: `vol:${v.name}`, kind: "data" });
   }
+  if (gl) edges.push({ from: "gitlab", to: "vps", kind: "ssh" });
   return { nodes, edges };
 }
 
@@ -146,7 +165,35 @@ export type MapAction =
   | { type: "service"; name: string; running: boolean }
   | { type: "env"; container: string; key: string; value: string | null }
   | { type: "flag"; name: string; value: string | number | boolean }
-  | { type: "rent"; plan: string };
+  | { type: "rent"; plan: string }
+  // ---------- GitLab settings (World 9) ----------
+  /** Add, change or (value null) delete a CI/CD variable. fromFile reads the value from a file in the world (a private key). */
+  | {
+      type: "ciVar";
+      key: string;
+      value: string | null;
+      varType?: "env_var" | "file";
+      protected?: boolean;
+      masked?: boolean;
+      fromFile?: { host: HostId; path: string };
+    }
+  | { type: "runner"; id: number; online: boolean }
+  | { type: "protectBranch"; branch: string; on: boolean }
+  | { type: "deployToken"; name: string; on: boolean; scopes?: ("read_repository" | "read_registry" | "write_registry")[] }
+  /** The laptop's ~/.ssh/id_ed25519.pub on your GitLab profile (git push needs it). */
+  | { type: "userKey"; on: boolean }
+  /** Press play on a manual job / retry a job, in the latest pipeline. */
+  | { type: "playJob"; job: string }
+  | { type: "retryJob"; job: string };
+
+function ciVarValue(w: World, a: Extract<MapAction, { type: "ciVar" }>): string | null {
+  if (a.fromFile) return getFile(w.hosts[a.fromFile.host], a.fromFile.path)?.content ?? null;
+  return a.value;
+}
+
+function laptopPub(w: World): string | undefined {
+  return getFile(w.hosts.laptop, "/home/you/.ssh/id_ed25519.pub")?.content.trim();
+}
 
 export function applyMapAction(w: World, a: MapAction): World {
   return produce(w, (d) => {
@@ -204,6 +251,54 @@ export function applyMapAction(w: World, a: MapAction): World {
       case "rent":
         if (!d.provider.rented) rentVps(d, a.plan);
         break;
+      case "ciVar": {
+        const gl = d.gitlab;
+        if (!gl) break;
+        const value = ciVarValue(d, a);
+        gl.variables = gl.variables.filter((v) => v.key !== a.key);
+        if (value !== null) gl.variables.push({ key: a.key, value, type: a.varType ?? "env_var", protected: !!a.protected, masked: !!a.masked });
+        break;
+      }
+      case "runner": {
+        const gl = d.gitlab;
+        if (!gl) break;
+        const r = gl.runners.find((x) => x.id === a.id);
+        if (r) r.online = a.online;
+        else if (a.online) gl.runners.push(defaultRunner({ id: a.id, description: `runner-${a.id}` }));
+        nudgePipelines(d);
+        break;
+      }
+      case "protectBranch": {
+        const gl = d.gitlab;
+        if (!gl) break;
+        gl.protectedBranches = gl.protectedBranches.filter((b) => b !== a.branch);
+        if (a.on) gl.protectedBranches.push(a.branch);
+        break;
+      }
+      case "deployToken": {
+        const gl = d.gitlab;
+        if (!gl) break;
+        const t = gl.deployTokens.find((x) => x.name === a.name && !x.revoked);
+        if (a.on && !t) {
+          const id = gl.deployTokens.length + 1;
+          gl.deployTokens.push({ id, name: a.name, username: `gitlab+deploy-token-${id}`, token: deployTokenValue(a.name, id), scopes: a.scopes ?? ["read_registry"] });
+        } else if (!a.on && t) t.revoked = true;
+        break;
+      }
+      case "userKey": {
+        const gl = d.gitlab;
+        const pub = laptopPub(d);
+        if (!gl || !pub) break;
+        gl.userKeys = gl.userKeys.filter((k) => keyBody(k) !== keyBody(pub));
+        if (a.on) gl.userKeys.push(pub);
+        break;
+      }
+      case "playJob":
+        playJob(d, a.job);
+        break;
+      case "retryJob":
+        retryJob(d, a.job);
+        break;
     }
   });
 }
@@ -242,5 +337,29 @@ export function isActionActive(w: World, a: MapAction): boolean {
       return w.flags[a.name] === a.value;
     case "rent":
       return w.provider.rented;
+    case "ciVar": {
+      const v = w.gitlab?.variables.find((x) => x.key === a.key);
+      const value = ciVarValue(w, a);
+      if (value === null) return !v;
+      return !!v && v.value === value && v.type === (a.varType ?? "env_var") && v.protected === !!a.protected && v.masked === !!a.masked;
+    }
+    case "runner":
+      return (w.gitlab?.runners.find((r) => r.id === a.id)?.online ?? false) === a.online;
+    case "protectBranch":
+      return (w.gitlab?.protectedBranches.includes(a.branch) ?? false) === a.on;
+    case "deployToken":
+      return (w.gitlab?.deployTokens.some((t) => t.name === a.name && !t.revoked) ?? false) === a.on;
+    case "userKey": {
+      const pub = laptopPub(w);
+      return (!!pub && !!w.gitlab?.userKeys.some((k) => keyBody(k) === keyBody(pub))) === a.on;
+    }
+    case "playJob": {
+      const j = latestPipeline(w.gitlab)?.jobs.find((x) => x.name === a.job);
+      return !!j && j.status !== "manual";
+    }
+    case "retryJob": {
+      const j = latestPipeline(w.gitlab)?.jobs.find((x) => x.name === a.job);
+      return !!j && j.status !== "failed";
+    }
   }
 }

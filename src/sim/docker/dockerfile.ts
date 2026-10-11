@@ -161,6 +161,8 @@ export interface BuildOpts {
   service?: string;
   /** No buildx plugin: the old builder's "Step 1/8" output. */
   legacy?: boolean;
+  /** Do not move the sim clock (a CI job builds inside a reconciler and keeps its own time). */
+  noClock?: boolean;
 }
 
 export interface BuildResult {
@@ -547,7 +549,7 @@ export function buildImage(w: World, host: Host, opts: BuildOpts): BuildResult {
   host.docker.images[ref] = { ref, id, sizeMb: Math.round(size * 10) / 10, kind, createdAt: prev?.id === id ? prev.createdAt : w.clock, meta };
   const secs = totalSecs(steps) + 1.6;
   lines.push(...renderSteps(steps, opts, sizes, baseRefs, true, ref, id));
-  advance(w, w.clock + Math.ceil(secs));
+  if (!opts.noClock) advance(w, w.clock + Math.ceil(secs));
   return { ok: true, lines, ref, seconds: secs };
 }
 

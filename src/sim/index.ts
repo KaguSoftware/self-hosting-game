@@ -9,3 +9,4 @@ export { effectiveSshd, runningSshd } from "./sshd";
 export { getFile, getDir, readText, writeFile } from "./fs";
 export * as P from "./predicates";
 export type { GoalCtx, Check, LogEntry } from "./predicates";
+export * as GL from "./gitlab";

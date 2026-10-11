@@ -1,6 +1,7 @@
 import { APT_COMMANDS } from "./commands/apt";
 import { DOCKER_COMMANDS } from "./commands/docker";
 import { FILE_COMMANDS } from "./commands/files";
+import { GIT_COMMANDS } from "./commands/git";
 import { NET_COMMANDS } from "./commands/net";
 import { OPS_COMMANDS } from "./commands/ops";
 import { SCRIPT_COMMANDS, sed } from "./commands/scripts";
@@ -33,6 +34,7 @@ const GROUPS: [string, Command[]][] = [
   ["Jobs and backups", OPS_COMMANDS],
   ["Containers", DOCKER_COMMANDS],
   ["Database", PG_COMMANDS],
+  ["Git", GIT_COMMANDS],
 ];
 
 const help: Command = {

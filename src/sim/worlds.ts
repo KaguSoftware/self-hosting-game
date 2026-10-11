@@ -151,7 +151,7 @@ export function createLaptop(): Host {
     `/home/${LAPTOP_USER}/code/crumb/package.json`,
     file(`{\n  "name": "crumb",\n  "scripts": { "dev": "next dev", "build": "next build", "start": "next start" }\n}\n`, 0o644, LAPTOP_USER),
   );
-  for (const p of ["openssh-client", "curl", "dnsutils", "nano"]) h.packages[p] = { version: "latest" };
+  for (const p of ["openssh-client", "curl", "dnsutils", "nano", "git"]) h.packages[p] = { version: "latest" };
   return h;
 }
 
