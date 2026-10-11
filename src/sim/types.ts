@@ -102,13 +102,43 @@ export interface Container {
   health?: "healthy" | "unhealthy" | "starting";
   logs: string[];
   createdAt: number;
+  // docker runtime extras (all optional, see the docker section below)
+  restartCount?: number;
+  startedAt?: number;
+  finishedAt?: number;
+  /** When the crash-loop backoff lets it start again. */
+  nextRestartAt?: number;
+  /** Stopped with docker stop: unless-stopped and always leave it down. */
+  manuallyStopped?: boolean;
+  /** IP per network name. */
+  ips?: Record<string, string>;
+  healthcheck?: HealthCheck;
+  /** Failed probes in a row. */
+  healthFails?: number;
+  /** Clock time of the last health probe. */
+  lastProbe?: number;
+  /** Command override (docker run IMAGE CMD..., compose command:). */
+  command?: string[];
+  /** Compose config hash, so up -d only recreates what changed. */
+  configHash?: string;
+  logging?: { driver: string; options: Record<string, string> };
+  /** docker run --rm */
+  autoRemove?: boolean;
+  /** Image id at creation time. */
+  imageId?: string;
+  /** Compose depends_on, kept for ordering on down and restart. */
+  dependsOn?: string[];
 }
 
 export interface DockerState {
-  images: Record<string, { ref: string; id: string; sizeMb: number; kind: AppKind; createdAt: number }>;
+  images: Record<string, { ref: string; id: string; sizeMb: number; kind: AppKind; createdAt: number; meta?: ImageMeta }>;
   containers: Record<string, Container>;
-  volumes: Record<string, { name: string; sizeMb: number; data?: string }>;
-  networks: Record<string, { name: string; driver: string }>;
+  volumes: Record<string, { name: string; sizeMb: number; data?: string; createdAt?: number; project?: string; pg?: PgData }>;
+  networks: Record<string, { name: string; driver: string; subnet?: string; project?: string }>;
+  /** Compose projects that were brought up (docker compose ls). */
+  projects?: Record<string, ComposeProject>;
+  /** Build cache: layer cache key to the time it was made. */
+  buildCache?: Record<string, number>;
 }
 
 export interface Host {
@@ -133,6 +163,8 @@ export interface Host {
   docker: DockerState;
   journal: JournalLine[];
   crontabs: Record<string, string>;
+  /** Extra apt repositories indexed by the last apt update ("docker"). */
+  aptRepos?: string[];
 }
 
 export interface DnsRecord {
@@ -168,6 +200,69 @@ export interface World {
   provider: ProviderState;
   certs: Record<string, CertState>;
   flags: Record<string, string | number | boolean>;
+  /** Extra images in remote registries (pushed by CI, or placed by a level). */
+  registry?: Record<string, RegistryImage>;
+}
+
+// ---------- docker ----------
+
+export interface HealthCheck {
+  /** ["CMD-SHELL", "pg_isready -U crumb"] or ["CMD", "wget", ...] */
+  test: string[];
+  /** Seconds. */
+  interval: number;
+  timeout: number;
+  retries: number;
+  startPeriod: number;
+}
+
+/** What an image knows about itself (from the registry catalog or a Dockerfile build). */
+export interface ImageMeta {
+  /** ENV baked into the image. HOSTNAME here sets where a Next.js app listens. */
+  env?: Record<string, string>;
+  entrypoint?: string[];
+  cmd?: string[];
+  exposed?: number[];
+  /** Env vars the app refuses to start without. */
+  requiredEnv?: string[];
+  /** NEXT_PUBLIC_* values frozen in at build time. */
+  baked?: Record<string, string>;
+  /** Paths inside the image worth knowing about (/app/.env, /app/node_modules). */
+  files?: string[];
+  workdir?: string;
+  /** Finer than AppKind: "nginx", "hello-world", "node", "alpine", "postgres", "caddy". */
+  flavor?: string;
+  /** Upstream version ("17.2", "2.10.2"). */
+  version?: string;
+  healthcheck?: HealthCheck;
+  /** Built here with docker build, not pulled. */
+  built?: boolean;
+  digest?: string;
+}
+
+/** The Postgres data inside a volume, written on first start. */
+export interface PgData {
+  /** Major version that initialized it ("17"). */
+  version: string;
+  user: string;
+  db: string;
+  password: string;
+}
+
+export interface ComposeProject {
+  name: string;
+  dir: string;
+  file: string;
+  services: string[];
+}
+
+export interface RegistryImage {
+  ref: string;
+  id: string;
+  sizeMb: number;
+  kind: AppKind;
+  ageDays?: number;
+  meta?: ImageMeta;
 }
 
 // ---------- shell side (per terminal window) ----------
@@ -181,6 +276,8 @@ export interface Frame {
   sudoOk?: boolean;
   /** Remote address shown in "Connection to X closed." */
   remote?: string;
+  /** Groups as they were at login. New group memberships only count from the next login. */
+  loginGroups?: string[];
 }
 
 export interface Pending {

@@ -173,6 +173,8 @@ export function createFreshVps(plan: { cpus: number; memGb: number; diskGb: numb
   put(h, "/etc/ufw", dir());
   put(h, "/etc/cron.d", dir());
   put(h, "/etc/apt/apt.conf.d", dir());
+  put(h, "/etc/apt/keyrings", dir());
+  put(h, "/etc/apt/sources.list.d", dir());
   put(
     h,
     "/etc/apt/apt.conf.d/20auto-upgrades",
@@ -323,7 +325,7 @@ export function createDemoWorld(): World {
   );
   vps.docker.networks.crumb_default = { name: "crumb_default", driver: "bridge" };
   vps.docker.volumes.crumb_caddy_data = { name: "crumb_caddy_data", sizeMb: 1 };
-  vps.docker.volumes.crumb_pgdata = { name: "crumb_pgdata", sizeMb: 48 };
+  vps.docker.volumes.crumb_pgdata = { name: "crumb_pgdata", sizeMb: 48, pg: { version: "17", user: "crumb", db: "crumb", password: "s3cret-pg" } };
   vps.docker.images["caddy:2.8"] = { ref: "caddy:2.8", id: "c4dd1e2f3a4b", sizeMb: 48, kind: "caddy", createdAt: 0 };
   vps.docker.images["registry.gitlab.com/crumb/web:latest"] = {
     ref: "registry.gitlab.com/crumb/web:latest",

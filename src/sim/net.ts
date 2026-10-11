@@ -84,10 +84,10 @@ function hop(id: HopId, label: string, ok: boolean, note: string, node?: string)
   return { id, label, ok, note, node: node ?? id };
 }
 
-/** Containers that answer to `name` on any network `from` is attached to. */
+/** Containers that answer to `name` on any network `from` is attached to. The default bridge has no names. */
 export function resolveInDocker(host: Host, from: Container, name: string): Container | undefined {
   return Object.values(host.docker.containers).find(
-    (c) => (c.service === name || c.name === name) && c.networks.some((n) => from.networks.includes(n)),
+    (c) => (c.service === name || c.name === name) && c.networks.some((n) => n !== "bridge" && from.networks.includes(n)),
   );
 }
 
@@ -224,6 +224,12 @@ export function traceHttp(w: World, url: string, opts: TraceOpts = { from: "inte
   const front = vps.docker.containers[listener.source.container];
   if (front.kind !== "caddy") {
     const node = front.kind === "nextjs" ? "app" : front.kind === "postgres" ? "db" : `c:${front.name}`;
+    // docker-proxy accepts, but nothing inside listens on the published container port (or only on loopback).
+    const mapped = front.ports.find((p) => p.hostPort === port);
+    if (mapped && front.listenPort && (mapped.containerPort !== front.listenPort || front.listenAddr.startsWith("127."))) {
+      hops.push(hop("app", front.name, false, `Port ${port} goes to ${mapped.containerPort} inside ${front.name}, but the program there listens on ${front.listenAddr}:${front.listenPort}`, node));
+      return res(false, { error: `curl: (56) Recv failure: Connection reset by peer` });
+    }
     if (front.kind === "postgres") {
       hops.push(hop("db", front.name, true, `Postgres is reachable on port ${port}`, node));
       return res(true, { status: 0 });
@@ -284,7 +290,8 @@ export function traceHttp(w: World, url: string, opts: TraceOpts = { from: "inte
     hops.push(hop("app", app.service ?? app.name, false, `Caddy dialed port ${uPort}, but the app listens on ${app.listenPort}`));
     return res(false, { status: 502 });
   }
-  if (app.listenAddr !== "0.0.0.0" && app.listenAddr !== "::") {
+  // 0.0.0.0 or the container's own IP are reachable from Caddy. Only loopback is not.
+  if (app.listenAddr === "localhost" || app.listenAddr.startsWith("127.")) {
     hops.push(hop("app", app.service ?? app.name, false, `The app listens on ${app.listenAddr}:${app.listenPort}, so only itself can reach it`));
     return res(false, { status: 502 });
   }

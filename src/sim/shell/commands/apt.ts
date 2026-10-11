@@ -1,3 +1,4 @@
+import { checkDockerRepo, dockerPostInstall, PKG_VERSIONS } from "../../docker/install";
 import type { Host, Service } from "../../types";
 import type { Command, Ctx } from "../ctx";
 
@@ -7,7 +8,13 @@ interface PkgInfo {
   sizeKb: number;
   deps: string[];
   service?: Omit<Service, "since" | "pid"> & { pid: number };
+  /** Only installable after this extra repository was added and apt update ran ("docker"). */
+  repo?: string;
+  /** Extra setup after unpacking (groups, folders, services). */
+  onInstall?: (ctx: Ctx) => void;
 }
+
+const dockerSetup = (ctx: Ctx) => dockerPostInstall(ctx.w, ctx.host);
 
 export const CATALOG: Record<string, PkgInfo> = {
   ncdu: { version: "1.19-0.1", section: "universe", sizeKb: 50, deps: [] },
@@ -49,7 +56,23 @@ export const CATALOG: Record<string, PkgInfo> = {
   "unattended-upgrades": { version: "2.9.1+nmu4ubuntu1", section: "main", sizeKb: 49, deps: [] },
   ufw: { version: "0.36.2-6", section: "main", sizeKb: 169, deps: [] },
   curl: { version: "8.5.0-2ubuntu10.4", section: "main", sizeKb: 226, deps: [] },
-  "docker.io": { version: "24.0.7-0ubuntu4.1", section: "universe", sizeKb: 29300, deps: ["containerd", "runc", "bridge-utils"] },
+  "docker.io": { version: "24.0.7-0ubuntu4.1", section: "universe", sizeKb: 29300, deps: ["containerd", "runc", "bridge-utils", "pigz", "ubuntu-fan"], onInstall: dockerSetup },
+  "docker-compose-v2": { version: "2.24.6+ds1-0ubuntu2~24.04.1", section: "universe", sizeKb: 14300, deps: [] },
+  "docker-buildx": { version: "0.12.1-0ubuntu2", section: "universe", sizeKb: 15900, deps: [] },
+  // Docker's own repository (download.docker.com). apt installs recommended packages too, so the plugins come along.
+  "docker-ce": {
+    version: PKG_VERSIONS["docker-ce"],
+    section: "stable",
+    sizeKb: 25800,
+    deps: ["docker-ce-cli", "containerd.io", "docker-buildx-plugin", "docker-compose-plugin", "docker-ce-rootless-extras", "pigz", "slirp4netns"],
+    repo: "docker",
+    onInstall: dockerSetup,
+  },
+  "docker-ce-cli": { version: PKG_VERSIONS["docker-ce-cli"], section: "stable", sizeKb: 14200, deps: [], repo: "docker" },
+  "containerd.io": { version: PKG_VERSIONS["containerd.io"], section: "stable", sizeKb: 30500, deps: [], repo: "docker" },
+  "docker-buildx-plugin": { version: PKG_VERSIONS["docker-buildx-plugin"], section: "stable", sizeKb: 30200, deps: [], repo: "docker" },
+  "docker-compose-plugin": { version: PKG_VERSIONS["docker-compose-plugin"], section: "stable", sizeKb: 12800, deps: [], repo: "docker" },
+  "docker-ce-rootless-extras": { version: PKG_VERSIONS["docker-ce-rootless-extras"], section: "stable", sizeKb: 9600, deps: [], repo: "docker" },
 };
 
 const ALIASES: Record<string, string> = { "postgresql-client-common": "postgresql-client" };
@@ -94,7 +117,8 @@ function doInstall(ctx: Ctx, names: string[]): number {
   const fetch: string[] = [];
   for (const n of allNew) {
     const info = CATALOG[n];
-    fetch.push(`Get:${i++} http://archive.ubuntu.com/ubuntu noble/${info?.section ?? "main"} amd64 ${n} amd64 ${info?.version ?? "1.0"} [${info?.sizeKb ?? 30} kB]`);
+    const mirror = info?.repo === "docker" ? "https://download.docker.com/linux/ubuntu noble/stable" : `http://archive.ubuntu.com/ubuntu noble/${info?.section ?? "main"}`;
+    fetch.push(`Get:${i++} ${mirror} amd64 ${n} amd64 ${info?.version ?? "1.0"} [${info?.sizeKb ?? 30} kB]`);
   }
   fetch.push(`Fetched ${kb} kB in 1s (${kb * 2} kB/s)`);
   for (const n of allNew) {
@@ -107,6 +131,16 @@ function doInstall(ctx: Ctx, names: string[]): number {
         `Created symlink /etc/systemd/system/multi-user.target.wants/${info.service.name}.service → ${info.service.unitPath}.`,
       );
       ctx.journal(info.service.name, `Started ${info.service.name}.service - ${info.service.description}.`, "systemd[1]");
+    }
+    if (info?.onInstall) {
+      const had = !!host.services.docker;
+      info.onInstall(ctx);
+      if (!had && host.services.docker) {
+        fetch.push(
+          "Created symlink /etc/systemd/system/multi-user.target.wants/docker.service → /usr/lib/systemd/system/docker.service.",
+          "Created symlink /etc/systemd/system/sockets.target.wants/docker.socket → /usr/lib/systemd/system/docker.socket.",
+        );
+      }
     }
   }
   fetch.push("Processing triggers for man-db (2.12.0-4build2) ...");
@@ -131,6 +165,24 @@ export const apt: Command = {
         return 0;
       case "update": {
         if (!needRoot(ctx)) return 100;
+        const dockerRepo = checkDockerRepo(host, 6);
+        host.aptRepos = (host.aptRepos ?? []).filter((r) => r !== "docker");
+        if (dockerRepo?.ok) host.aptRepos.push("docker");
+        if (dockerRepo?.errors.length) {
+          ctx.out(
+            [
+              "Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
+              "Hit:2 http://archive.ubuntu.com/ubuntu noble-updates InRelease",
+              "Hit:3 http://security.ubuntu.com/ubuntu noble-security InRelease",
+              "Hit:4 http://archive.ubuntu.com/ubuntu noble-backports InRelease",
+              ...dockerRepo.lines,
+              "Reading package lists... Done",
+            ].join("\n"),
+          );
+          ctx.err(dockerRepo.errors.join("\n"));
+          host.aptFresh = true;
+          return 100;
+        }
         ctx.out(
           [
             "Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease",
@@ -138,6 +190,7 @@ export const apt: Command = {
             "Get:3 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]",
             "Get:4 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]",
             "Get:5 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [15.0 MB]",
+            ...(dockerRepo?.lines ?? []),
             "Fetched 21.4 MB in 3s (7,120 kB/s)",
             "Reading package lists... Done",
             "Building dependency tree... Done",
@@ -158,6 +211,12 @@ export const apt: Command = {
         if (!needRoot(ctx)) return 100;
         header(ctx);
         for (const n of names) {
+          const repo = CATALOG[n]?.repo;
+          if (repo && !host.packages[n] && !(host.aptRepos ?? []).includes(repo)) {
+            ctx.err(`E: Unable to locate package ${n}`);
+            if (repo === "docker") ctx.info(`${n} comes from Docker's own package repository. Add it in /etc/apt/sources.list.d/docker.list, then run sudo apt update.`);
+            return 100;
+          }
           if (!CATALOG[n] && !host.packages[n]) {
             ctx.err(`E: Unable to locate package ${n}`);
             if (!host.aptFresh) ctx.info("The package list on this box is empty or stale. Run sudo apt update first.");

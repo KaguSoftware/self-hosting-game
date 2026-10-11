@@ -1,5 +1,5 @@
 import { createDraft, finishDraft, setAutoFreeze } from "immer";
-import { can, getDir, getNode, isSudoer, resolvePath } from "../fs";
+import { can, getDir, getNode, isSudoer, resolvePath, userGroups } from "../fs";
 import { advance } from "../tick";
 import type { Frame, OutLine, Pending, Shell, World } from "../types";
 import { globMatch } from "../util";
@@ -82,7 +82,17 @@ function makeCtx(
     home,
     vars: baseVars(ex),
     env: { ...(ex.sh.vars ?? {}), ...(opts.env ?? {}) },
-    script: (text, args, name) => runScriptText(ex, text, args, name),
+    script: (text, args, name) => {
+      // sudo sh file.sh: every line of the script runs as root.
+      if (!opts.sudo || frame.user === "root") return runScriptText(ex, text, args, name);
+      const depth = ex.sh.frames.length;
+      ex.sh.frames.push({ ...frame, user: "root", via: "su", sudoOk: true });
+      try {
+        return runScriptText(ex, text, args, name);
+      } finally {
+        ex.sh.frames.length = depth;
+      }
+    },
     out: (s) => opts.outBuf.push(s),
     err: (s) => {
       if (!opts.errNull) ex.out.push({ text: s, kind: "err" });
@@ -222,7 +232,7 @@ function runSimple(ex: Exec, cmd: SimpleCommand, stdin: string | undefined, isLa
     if (login) {
       const target = asUser;
       const u = host.users[target];
-      ex.sh.frames.push({ host: frame.host, user: target, cwd: u?.home ?? "/root", via: "su" });
+      ex.sh.frames.push({ host: frame.host, user: target, cwd: u?.home ?? "/root", via: "su", loginGroups: userGroups(host, target) });
       return { code: 0, stdout: "" };
     }
     if (!argv.length) {
@@ -237,7 +247,7 @@ function runSimple(ex: Exec, cmd: SimpleCommand, stdin: string | undefined, isLa
         ex.out.push({ text: `su: user ${target} does not exist or the user entry does not contain all the required fields`, kind: "err" });
         return { code: 1, stdout: "" };
       }
-      ex.sh.frames.push({ host: frame.host, user: target, cwd: u.home, via: "su" });
+      ex.sh.frames.push({ host: frame.host, user: target, cwd: u.home, via: "su", loginGroups: userGroups(host, target) });
       return { code: 0, stdout: "" };
     }
     sudo = asUser === "root";
@@ -380,6 +390,7 @@ export function runLine(world: World, shell: Shell, line: string, vars: Record<s
   if (!trimmed) return finish(ex, w, sh, 0);
   sh.history.push(trimmed);
   if (sh.history.length > 300) sh.history.splice(0, sh.history.length - 300);
+  captureLogin(w, sh);
   advance(w, w.clock + 4);
 
   let seq: Sequence;
@@ -404,6 +415,15 @@ export function runLine(world: World, shell: Shell, line: string, vars: Record<s
   }
   const code = runSequence(ex, seq);
   return finish(ex, w, sh, code);
+}
+
+/**
+ * A session's groups are fixed when it logs in. Windows that started before this was
+ * tracked get their groups on their first command, which is the same thing.
+ */
+function captureLogin(w: World, sh: Shell): void {
+  const f = topFrame(sh);
+  if (!f.loginGroups && w.hosts[f.host]?.users[f.user]) f.loginGroups = userGroups(w.hosts[f.host], f.user);
 }
 
 function resumePending(ex: Exec, p: Pending, input: string): number {
