@@ -86,4 +86,7 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "dind", re: /\bdind\b/i },
   { term: "SHA", re: /\bSHAs?\b/ },
   { term: "deploy token", re: /\bdeploy tokens?\b/i },
+  // World 10
+  { term: "Coolify", re: /\bCoolify\b/ },
+  { term: "VPN", re: /\bVPN\b/ },
 ];

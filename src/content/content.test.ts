@@ -18,8 +18,9 @@ import { world6 } from "./worlds/w6";
 import { world7 } from "./worlds/w7";
 import { world8 } from "./worlds/w8";
 import { world9 } from "./worlds/w9";
+import { world10 } from "./worlds/w10";
 
-const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5, world6, world7, world8, world9];
+const AUTHORED_FOR_TEST = [worldStart, world0, world1, world2, world3, world4, world5, world6, world7, world8, world9, world10];
 import type { Step } from "./schema";
 import type { MapAction } from "@/sim/map";
 import type { Shell, World } from "@/sim/types";

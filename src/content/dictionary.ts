@@ -94,6 +94,10 @@ export const TERMS: Term[] = [
   { id: "sha", term: "Commit SHA", plain: "A commit's unique id, like 87789d92. Tag images with it to roll back to any commit.", world: 9 },
   { id: "ci-cd", term: "CI/CD", plain: "Robots that test, build and deploy on every push.", replaces: "Vercel's git integration.", world: 9 },
   { id: "runner", term: "Runner", plain: "The machine that runs your GitLab CI jobs. No runner, jobs stay pending.", world: 9 },
+  { id: "dokploy", term: "Dokploy", plain: "Another self-hosted dashboard like Coolify: Docker, a proxy, HTTPS and deploys behind buttons.", world: 10 },
+  { id: "vpn", term: "VPN", plain: "A private tunnel into a company network. Work servers often only answer through one.", world: 10 },
+  { id: "tls-internal", term: "tls internal", plain: "Caddy signs its own certificates, for names the internet cannot reach. Browsers warn until the root is trusted.", world: 10 },
+  { id: "snapshot", term: "Snapshot", plain: "A copy of a whole VM's disk at one moment, made by the provider. Handy, but not a replacement for database backups.", world: 10 },
   { id: "coolify", term: "Coolify", plain: "A self-hosted dashboard that does Docker, Caddy-like proxy and deploys for you.", replaces: "Vercel's dashboard, on your own server.", world: 10 },
 ];
 
