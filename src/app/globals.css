@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* Monochrome. Red is the only color, reserved for errors and outages. */
+  /* Monochrome base. Green (teal token) = right, red = wrong. Nothing else is colored. */
   --color-bg: #0a0a0a;
   --color-bg2: #0e0e0e;
   --color-panel: #131313;
@@ -14,9 +14,10 @@
   --color-amber: #ffffff;
   --color-amber2: #e6e6e6;
   --color-amberdim: #4a4a4a;
-  --color-teal: #d9d9d9;
-  --color-tealdim: #3a3a3a;
-  --color-red: #ff5a52;
+  /* Semantic: teal = correct / healthy (green), red = wrong / down. */
+  --color-teal: #3ecf74;
+  --color-tealdim: #14532d;
+  --color-red: #f8564e;
   --color-reddim: #3d1614;
   --color-yellow: #cfcfcf;
 
@@ -124,7 +125,9 @@ button {
 button:disabled {
   cursor: not-allowed;
 }
-:focus-visible {
-  outline: 2px solid var(--color-teal);
-  outline-offset: 2px;
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
 }

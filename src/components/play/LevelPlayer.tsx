@@ -79,7 +79,8 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
       onDone(r) {
         const prog = useProgress.getState();
         const combo = usePlay.getState().combo;
-        const base = r.usedShowMe ? Math.round(STEP_XP / 2) : STEP_XP;
+        const wrongGuess = (step.task.kind === "predict" || step.task.kind === "rapid") && r.mistakes > 0 && !r.bonusXp;
+        const base = r.usedShowMe ? Math.round(STEP_XP / 2) : wrongGuess ? 3 : STEP_XP;
         const xp = Math.round(base * comboMultiplier(combo)) + (r.bonusXp ?? 0);
         prog.addXp(xp);
         prog.attempt(level.world, r.mistakes === 0 && !r.usedShowMe, step.tags);
@@ -88,7 +89,6 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         setFlags((f) => ({ hints: f.hints || r.usedHints, showMe: f.showMe || r.usedShowMe }));
         setResult({ ...r, xp, why: [step.after, r.why].filter(Boolean).join(" ") || undefined });
         sfx.success();
-        useUi.getState().toast(`+${xp} XP`, "xp");
         // Remember the deploy password the player chose, so later levels use it.
         const deploy = usePlay.getState().state.world?.hosts.vps.users.deploy;
         if (deploy?.password && deploy.password !== prog.vars.deployPassword) prog.setVar("deployPassword", deploy.password);
@@ -198,63 +198,74 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
   const due = dueCards(useProgress.getState().review, dayKey()).length;
   const nl = nextLevel(level.id);
 
+  const verdict: "good" | "bad" | "help" | "done" = !result
+    ? "done"
+    : result.usedShowMe
+      ? "help"
+      : (t.kind === "predict" || t.kind === "rapid") && result.mistakes > 0
+        ? "bad"
+        : result.mistakes === 0
+          ? "good"
+          : "done";
+  const verdictTitle = { good: "Correct!", bad: "Not quite", help: "Solved, with help", done: "Done" }[verdict];
+
   return (
-    <div className="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-3 pb-28 pt-2 md:px-6">
+    <div className="mx-auto flex min-h-dvh max-w-[1240px] flex-col px-4 pb-16 md:px-6">
       {/* header */}
-      <header className="sticky top-0 z-30 -mx-3 mb-3 flex items-center gap-2 border-b border-line bg-bg/90 px-3 py-2 backdrop-blur md:-mx-6 md:px-6">
-        <Link href="/" className="rounded-md px-2 py-1 font-mono text-[18px] text-muted hover:text-amber" aria-label="Back to the path">
+      <header className="sticky top-0 z-30 -mx-4 mb-5 flex items-center gap-3 border-b border-line bg-bg/95 px-4 py-2.5 backdrop-blur md:-mx-6 md:px-6">
+        <Link href="/" className="flex h-8 w-8 items-center justify-center rounded-md text-[16px] text-muted hover:bg-panel hover:text-ink" aria-label="Back to the path">
           ✕
         </Link>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
-            {level.world < 0 ? world?.title : `${worldLabel(level.world)} · ${world?.title}`}
-          </div>
-          <div className="truncate font-display text-[16px] leading-tight text-ink">{level.title}</div>
+          <div className="truncate text-[12px] text-muted">{level.world < 0 ? world?.title : `${worldLabel(level.world)} · ${world?.title}`}</div>
+          <div className="truncate text-[15px] font-semibold leading-tight text-ink">{level.title}</div>
         </div>
-        <div className="hidden items-center gap-1 sm:flex">
+        <div className="hidden w-40 items-center gap-1 md:flex" aria-label={`Step ${stepIdx + 1} of ${level.steps.length}`}>
           {level.steps.map((s, i) => (
-            <span key={s.id} className={`h-1.5 w-6 rounded-full ${i < stepIdx || (i === stepIdx && done) ? "bg-teal" : i === stepIdx ? "bg-amber" : "bg-line2"}`} />
+            <span key={s.id} className={`h-1.5 flex-1 rounded-full transition-colors ${i < stepIdx || (i === stepIdx && done) ? "bg-teal" : i === stepIdx ? "bg-ink" : "bg-line2"}`} />
           ))}
         </div>
-        <div className="flex items-center gap-1.5 font-mono text-[11px]">
-          <span className={`rounded-md px-2 py-1 ${play.combo >= 3 ? "bg-amber/15 text-amber" : "text-muted"}`} title="Combo">
-            x{comboMultiplier(play.combo)} · {play.combo}
-          </span>
-          <span className="hidden rounded-md px-2 py-1 text-teal sm:inline">+{levelXp} XP</span>
-          <button type="button" onClick={() => useUi.getState().openDict()} className="rounded-md border border-line2 px-2 py-1 text-muted hover:text-amber" title="Dictionary">
+        <div className="flex items-center gap-1.5 text-[12px]">
+          {play.combo >= 2 && (
+            <span className="rounded-md bg-panel2 px-2 py-1 font-mono text-ink" title="Right answers in a row multiply your XP">
+              combo {play.combo} · x{comboMultiplier(play.combo)}
+            </span>
+          )}
+          <span className="hidden px-1 font-mono text-muted sm:inline">+{levelXp} XP</span>
+          <button type="button" onClick={() => useUi.getState().openDict()} className="h-8 rounded-md border border-line2 px-2.5 text-muted hover:border-ink hover:text-ink" title="Dictionary">
             ?
           </button>
-          <button type="button" onClick={copyContext} className="rounded-md border border-line2 px-2 py-1 text-muted hover:text-teal" title="Copy context for Claude">
-            {copied ? "copied ✓" : "ask Claude"}
+          <button type="button" onClick={copyContext} className="h-8 rounded-md border border-line2 px-2.5 text-muted hover:border-ink hover:text-ink" title="Copy context for Claude">
+            {copied ? "Copied ✓" : "Ask Claude"}
           </button>
         </div>
       </header>
 
       <AnimatePresence>
-        {comboPop && comboPop.n >= 2 && (
+        {comboPop && comboPop.n >= 3 && (
           <motion.div
             key={comboPop.key}
-            initial={{ opacity: 0, y: 10, scale: 0.8 }}
-            animate={{ opacity: 1, y: -10, scale: 1 }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}
-            onAnimationComplete={() => setTimeout(() => setComboPop(null), 500)}
-            className="pointer-events-none fixed left-1/2 top-16 z-50 -translate-x-1/2 font-display text-3xl text-amber glow"
+            transition={{ duration: 0.25 }}
+            onAnimationComplete={() => setTimeout(() => setComboPop(null), 700)}
+            className="pointer-events-none fixed left-1/2 top-16 z-50 -translate-x-1/2 rounded-full bg-ink px-3 py-1 font-mono text-[13px] font-semibold text-bg"
           >
-            COMBO x{comboPop.n}
+            {comboPop.n} in a row
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className={`grid flex-1 gap-4 ${showSideMap ? "lg:grid-cols-[minmax(0,1fr)_400px]" : ""}`}>
-        <main className="min-w-0 space-y-4">
-          <motion.div key={step.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }}>
+      <div className={`grid flex-1 items-start gap-6 ${showSideMap ? "lg:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+        <main className={`min-w-0 space-y-4 ${showSideMap ? "" : t.kind === "map" ? "mx-auto w-full max-w-5xl" : "mx-auto w-full max-w-3xl"}`}>
+          <motion.div key={step.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}>
             <MissionCard step={step} index={stepIdx} total={level.steps.length} />
           </motion.div>
           {showSideMap && (
             <div className="lg:hidden">
-              <button type="button" onClick={() => setMapOpen(!mapOpen)} className="mb-2 font-mono text-[11px] text-muted hover:text-amber">
-                {mapOpen ? "▾ hide server map" : "▸ show server map"}
+              <button type="button" onClick={() => setMapOpen(!mapOpen)} className="mb-2 text-[13px] text-muted hover:text-ink">
+                {mapOpen ? "▾ Hide server map" : "▸ Show server map"}
               </button>
               {mapOpen && <ServerMap world={play.preview ?? play.state.world} trace={play.trace} traceKey={play.traceKey} forceVertical />}
             </div>
@@ -263,11 +274,11 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         </main>
         {showSideMap && (
           <aside className="hidden lg:block">
-            <div className="sticky top-20 space-y-2">
-              <ServerMap world={play.preview ?? play.state.world} trace={play.trace} traceKey={play.traceKey} forceVertical title={play.preview ? "what if... (preview)" : "your infrastructure, live"} />
+            <div className="sticky top-[72px] space-y-2">
+              <ServerMap world={play.preview ?? play.state.world} trace={play.trace} traceKey={play.traceKey} forceVertical title={play.preview ? "What if... (preview)" : "Your servers, live"} />
               {pwKnown && (
-                <button type="button" onClick={() => setRevealPw(!revealPw)} className="font-mono text-[11px] text-faint hover:text-muted">
-                  deploy's password: {revealPw ? play.state.world.hosts.vps.users.deploy?.password : "•••••• (tap to show)"}
+                <button type="button" onClick={() => setRevealPw(!revealPw)} className="text-[12px] text-faint hover:text-muted">
+                  deploy&apos;s password: {revealPw ? play.state.world.hosts.vps.users.deploy?.password : "•••••• (tap to show)"}
                 </button>
               )}
             </div>
@@ -275,28 +286,62 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         )}
       </div>
 
-      {/* success banner */}
+      {/* step result */}
       <AnimatePresence>
         {result && !summary && (
           <motion.div
-            initial={{ y: 120 }}
-            animate={{ y: 0 }}
-            exit={{ y: 120 }}
-            transition={{ type: "spring", stiffness: 300, damping: 28 }}
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-teal/40 bg-[#111111]/95 backdrop-blur"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-40 flex items-end justify-center bg-black/55 p-4 sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="result-title"
           >
-            <div className="mx-auto flex max-w-[1400px] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center md:px-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-2xl text-teal glow-teal">{result.mistakes === 0 && !result.usedShowMe ? "Nailed it" : "Done"}</span>
-                  <span className="rounded bg-amber/15 px-1.5 font-mono text-[12px] text-amber">+{result.xp} XP</span>
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32 }}
+              className={`w-full max-w-md rounded-2xl border bg-panel p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8)] ${
+                verdict === "bad" ? "border-red/50" : verdict === "help" ? "border-line2" : "border-teal/50"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <motion.span
+                  initial={{ scale: 0.4, rotate: -20 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 18, delay: 0.05 }}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                    verdict === "bad" ? "bg-red/15 text-red" : verdict === "help" ? "bg-panel2 text-ink" : "bg-teal/15 text-teal"
+                  }`}
+                  aria-hidden
+                >
+                  {verdict === "bad" ? (
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                      <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                      <path d="M5 11.5l4 4 8-9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </motion.span>
+                <div className="min-w-0 flex-1">
+                  <div id="result-title" className={`text-[20px] font-semibold leading-tight ${verdict === "bad" ? "text-red" : verdict === "help" ? "text-ink" : "text-teal"}`}>
+                    {verdictTitle}
+                  </div>
+                  <div className="mt-0.5 font-mono text-[12px] text-muted">
+                    +{result.xp} XP{play.combo >= 2 ? ` · combo x${comboMultiplier(play.combo)}` : ""}
+                  </div>
                 </div>
-                {result.why && <p className="text-[14px] leading-snug text-ink/90">{result.why}</p>}
               </div>
-              <Btn kind="teal" onClick={next} className="sm:min-w-40">
-                Continue ↵
+              {result.why && <p className="mt-4 text-[15px] leading-relaxed text-ink/90">{result.why}</p>}
+              <Btn kind={verdict === "bad" || verdict === "help" ? "primary" : "teal"} onClick={next} className="mt-5 w-full">
+                {stepIdx + 1 < level.steps.length ? "Continue" : "Finish level"} <span className="ml-1 font-mono text-[12px] opacity-60">↵</span>
               </Btn>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

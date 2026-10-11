@@ -161,7 +161,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
 
       <AnimatePresence>
         {phase === "fixed" && result && (
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 rounded-xl border border-teal/50 bg-panel p-4">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 rounded-xl border border-line2 bg-panel p-4">
             <div className="flex flex-wrap items-end gap-6">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-widest text-muted">score</div>
@@ -177,7 +177,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
               </div>
             </div>
             <div>
-              <div className="mb-1 font-mono text-[10px] uppercase tracking-widest text-teal">Fastest diagnostic path</div>
+              <div className="mb-1 font-mono text-[10px] uppercase tracking-widest text-muted">Fastest diagnostic path</div>
               <ol className="space-y-0.5">
                 {incident.fastestPath.map((p, i) => (
                   <li key={p} className="font-mono text-[12px] text-ink/90">
@@ -189,7 +189,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
             <ul className="space-y-1">
               {incident.debrief.map((d) => (
                 <li key={d} className="text-[13.5px] text-ink/90">
-                  <span className="text-teal">›</span> {d}
+                  <span className="text-muted">›</span> {d}
                 </li>
               ))}
             </ul>

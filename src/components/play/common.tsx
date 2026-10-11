@@ -28,13 +28,13 @@ export interface TaskCallbacks {
 
 export function MissionCard({ step, index, total }: { step: Step; index: number; total: number }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-amber/80">
-          Mission {index + 1}/{total}
-        </span>
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1 font-mono text-[11px] text-muted">
+          Step {index + 1} of {total}
+        </div>
+        <h2 className="text-balance text-[19px] font-semibold leading-snug text-ink md:text-[20px]">{step.mission}</h2>
       </div>
-      <h2 className="font-sans text-[17px] font-semibold leading-snug text-ink md:text-lg">{step.mission}</h2>
       {step.intel && <IntelCard intel={step.intel} />}
     </div>
   );
@@ -44,21 +44,21 @@ export function IntelCard({ intel }: { intel: Intel }) {
   const openDict = useUi((s) => s.openDict);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.1 }}
-      className="relative overflow-hidden rounded-lg border border-teal/30 bg-teal/[0.06] px-3 py-2"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1], delay: 0.05 }}
+      className="rounded-xl border border-line bg-panel px-4 py-3"
     >
-      <div className="absolute left-0 top-0 h-full w-0.5 bg-teal/70" />
-      <div className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.25em] text-teal">Intel</div>
-      {intel.lines.map((l) => (
-        <p key={l} className="font-mono text-[12.5px] leading-snug text-ink/90">
-          {l}
-        </p>
-      ))}
-      {intel.analogy && <p className="mt-1 text-[12.5px] italic leading-snug text-teal/90">{intel.analogy}</p>}
+      <div className="space-y-1">
+        {intel.lines.map((l) => (
+          <p key={l} className="max-w-[68ch] text-[15px] leading-relaxed text-ink/90">
+            {l}
+          </p>
+        ))}
+      </div>
+      {intel.analogy && <p className="mt-2 max-w-[68ch] text-[14px] italic leading-relaxed text-muted">{intel.analogy}</p>}
       {intel.terms?.length ? (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {intel.terms.map((t) => {
             const term = termById(t);
             if (!term) return null;
@@ -67,9 +67,9 @@ export function IntelCard({ intel }: { intel: Intel }) {
                 key={t}
                 type="button"
                 onClick={() => openDict(term.term)}
-                className="rounded border border-teal/30 px-1.5 font-mono text-[10px] text-teal/90 hover:bg-teal/10"
+                className="rounded-md border border-line2 px-2 py-0.5 text-[12px] text-muted transition hover:border-ink hover:text-ink"
               >
-                ? {term.term}
+                What is {term.term}?
               </button>
             );
           })}
@@ -170,11 +170,11 @@ export function GoalList({ goals, met }: { goals: { describe: string }[]; met: b
         <motion.li
           key={g.describe}
           animate={met[i] ? { x: [0, 4, 0] } : {}}
-          className={`flex items-center gap-2 font-mono text-[12.5px] ${met[i] ? "text-teal" : "text-muted"}`}
+          className={`flex items-center gap-2.5 text-[14px] ${met[i] ? "text-teal" : "text-ink/80"}`}
         >
           <span
-            className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
-              met[i] ? "border-teal bg-teal/20 text-teal" : "border-line2"
+            className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
+              met[i] ? "border-teal bg-teal text-bg" : "border-line2"
             }`}
           >
             {met[i] ? "✓" : ""}
@@ -201,18 +201,18 @@ export function Btn({
 }) {
   const k =
     kind === "primary"
-      ? "bg-amber text-bg hover:bg-amber2 shadow-[0_3px_0_#4a4a4a] active:translate-y-[2px] active:shadow-none"
+      ? "bg-ink text-bg hover:bg-white active:translate-y-px"
       : kind === "teal"
-        ? "bg-teal text-bg hover:brightness-110 shadow-[0_3px_0_#4a4a4a] active:translate-y-[2px] active:shadow-none"
+        ? "bg-teal text-bg hover:brightness-110 active:translate-y-px"
         : kind === "danger"
           ? "bg-red text-bg hover:brightness-110"
-          : "border border-line2 text-ink hover:border-amber hover:text-amber";
+          : "border border-line2 text-ink hover:border-ink";
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-lg px-4 py-2 font-mono text-[13px] font-semibold tracking-wide transition disabled:opacity-40 ${k} ${className}`}
+      className={`rounded-lg px-4 py-2.5 text-[14px] font-semibold transition disabled:opacity-40 ${k} ${className}`}
     >
       {children}
     </button>

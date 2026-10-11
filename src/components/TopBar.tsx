@@ -32,10 +32,10 @@ export default function TopBar() {
             {p.streak.freezes ? <span className="ml-1 text-muted">+{p.streak.freezes} freeze</span> : null}
           </span>
           <Link href="/profile" className="group flex items-center gap-2 rounded-md px-2 py-1 hover:bg-panel" title={rankFor(level)}>
-            <span className="font-display text-xl leading-none text-teal">L{level}</span>
+            <span className="font-mono text-[13px] font-semibold leading-none text-ink">Lv {level}</span>
             <span className="hidden w-24 sm:block">
               <span className="block h-1.5 overflow-hidden rounded-full bg-line">
-                <motion.span className="block h-full bg-teal" animate={{ width: `${(into / need) * 100}%` }} />
+                <motion.span className="block h-full bg-ink" animate={{ width: `${(into / need) * 100}%` }} />
               </span>
               <span className="block text-[10px] text-muted">{p.xp} XP</span>
             </span>

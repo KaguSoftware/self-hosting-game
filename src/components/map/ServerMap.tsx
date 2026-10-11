@@ -122,10 +122,10 @@ const ROLE: Record<MapNode["kind"], string> = {
 };
 
 const statusClass: Record<MapNode["status"], string> = {
-  ok: "border-amber/70 bg-panel2 text-ink",
+  ok: "border-line2 bg-panel2 text-ink",
   off: "border-dashed border-line2 bg-panel/70 text-muted",
-  warn: "border-yellow/80 bg-panel2 text-ink",
-  down: "border-red bg-reddim/40 text-ink",
+  warn: "border-line2 bg-panel2 text-ink",
+  down: "border-red/80 bg-reddim/40 text-ink",
   ghost: "border-dashed border-line bg-transparent text-faint",
 };
 
@@ -144,7 +144,17 @@ export default function ServerMap(props: ServerMapProps) {
 
   const vertical = forceVertical || width < 620;
   const model = useMemo(() => deriveMap(world), [world]);
-  const pos = useMemo(() => layout(model.nodes, vertical), [model, vertical]);
+  // Vertical maps only take the height they need: y values are units of a 100-unit-tall map,
+  // and the map is cut off just below the lowest box.
+  const { pos, units } = useMemo(() => {
+    const raw = layout(model.nodes, vertical);
+    if (!vertical) return { pos: raw, units: 100 };
+    const maxY = Math.max(17, ...Object.values(raw).map((p) => p.y));
+    const u = Math.min(100, Math.max(model.nodes.length > 3 ? 62 : 56, maxY + 9));
+    const scaled: Record<string, Pt> = {};
+    for (const [k, p] of Object.entries(raw)) scaled[k] = { x: p.x, y: (p.y / u) * 100 };
+    return { pos: scaled, units: u };
+  }, [model, vertical]);
   const vpsNode = model.nodes.find((n) => n.id === "vps");
   const rented = world.provider.rented;
 
@@ -160,7 +170,7 @@ export default function ServerMap(props: ServerMapProps) {
       const node = h.node === "vps" ? null : h.node;
       const p = node ? pos[node] : undefined;
       if (!p && h.node === "vps") {
-        pts.push(vertical ? { x: 50, y: 70 } : { x: 74, y: 50 });
+        pts.push(vertical ? { x: 50, y: (70 / units) * 100 } : { x: 74, y: 50 });
         lastNode = "vps";
       } else if (p) {
         pts.push(p);
@@ -195,24 +205,24 @@ export default function ServerMap(props: ServerMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traceKey]);
 
-  const aspect = vertical ? "aspect-[4/7.4]" : "aspect-[1000/520]";
-  const vpsBox = vertical ? { left: 4, top: 37, width: 92, height: 62 } : { left: 46.5, top: 8, width: 52, height: 84 };
+  const aspectStyle = vertical ? { aspectRatio: `4 / ${(7 * units) / 100}` } : { aspectRatio: "1000 / 520" };
+  const vpsBox = vertical ? { left: 4, top: (37 / units) * 100, width: 92, height: ((units - 38) / units) * 100 } : { left: 46.5, top: 8, width: 52, height: 84 };
 
   return (
     <div ref={ref} className={`relative w-full ${className ?? ""}`}>
-      {title && <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">{title}</div>}
-      <div className={`relative w-full ${aspect} max-h-[78vh] overflow-hidden rounded-xl border border-line bg-bg2/80`}>
+      {title && <div className="mb-1.5 text-[12px] text-muted">{title}</div>}
+      <div className="relative w-full overflow-hidden rounded-xl border border-line bg-bg2/80" style={aspectStyle}>
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(var(--color-line2)_1px,transparent_1px),linear-gradient(90deg,var(--color-line2)_1px,transparent_1px)] [background-size:24px_24px]" />
         {/* VPS box */}
         <div
-          className={`absolute rounded-xl border ${rented ? "border-amber/40 bg-amber/[0.03]" : "border-dashed border-line"} `}
+          className={`absolute rounded-xl border ${rented ? "border-line2 bg-white/[0.015]" : "border-dashed border-line"} `}
           style={{ left: `${vpsBox.left}%`, top: `${vpsBox.top}%`, width: `${vpsBox.width}%`, height: `${vpsBox.height}%` }}
         >
-          <div className="absolute -top-2.5 left-3 bg-bg2 px-1.5 font-mono text-[10px] uppercase tracking-widest text-amber/80">
+          <div className="absolute -top-2.5 left-3 bg-bg2 px-1.5 font-mono text-[11px] text-ink/80">
             {vpsNode?.label ?? "server"} {rented && <span className="text-muted normal-case">· {vpsNode?.sub}</span>}
           </div>
           {!rented && (
-            <div className="flex h-full items-center justify-center p-4 text-center font-mono text-xs text-faint">
+            <div className="flex h-full items-center justify-center p-4 text-center text-[13px] text-faint">
               No server yet.
               <br />
               You rent one in World 1.
@@ -226,7 +236,7 @@ export default function ServerMap(props: ServerMapProps) {
             const a = pos[e.from];
             const b = pos[e.to];
             if (!a || !b) return null;
-            const color = e.kind === "ssh" ? "var(--color-teal)" : e.kind === "data" ? "var(--color-faint)" : "var(--color-amber)";
+            const color = e.kind === "data" ? "var(--color-faint)" : "var(--color-muted)";
             return (
               <line
                 key={`${e.from}-${e.to}`}
@@ -262,35 +272,35 @@ export default function ServerMap(props: ServerMapProps) {
                   exit={{ opacity: 0, scale: 0.6 }}
                   transition={{ type: "spring", stiffness: 380, damping: 26 }}
                   className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: `${p.x}%`, top: `${p.y}%`, width: vertical ? "40%" : "11.5%", minWidth: 84 }}
+                  style={{ left: `${p.x}%`, top: `${p.y}%`, width: vertical ? "40%" : "12%", minWidth: 104 }}
                 >
                   <button
                     type="button"
                     disabled={!interactive}
                     onClick={() => onNodeTap?.(n.id)}
                     className={`group relative block w-full rounded-lg border px-2 py-1.5 text-left transition ${statusClass[n.status]} ${
-                      interactive ? "hover:border-teal hover:shadow-[0_0_0_3px_rgba(255,255,255,0.15)] active:scale-[0.97]" : "cursor-default"
-                    } ${f?.kind === "good" ? "!border-teal shadow-[0_0_18px_rgba(255,255,255,0.45)]" : ""} ${f?.kind === "bad" ? "shake !border-red" : ""} ${
+                      interactive ? "hover:border-ink hover:bg-panel2 active:scale-[0.97]" : "cursor-default"
+                    } ${f?.kind === "good" ? "!border-teal !bg-teal/10" : ""} ${f?.kind === "bad" ? "shake !border-red" : ""} ${
                       isDone ? "opacity-60" : ""
                     } ${n.status === "down" ? "animate-pulse" : ""}`}
                     aria-label={`${n.label}: ${n.sub}`}
                   >
                     <div className="flex items-center gap-1.5">
                       <span
-                        className={`font-display text-[15px] leading-none ${n.status === "ok" ? "text-amber glow" : n.status === "down" ? "text-red" : n.status === "warn" ? "text-yellow" : "text-faint"}`}
+                        className={`font-mono text-[10px] font-bold leading-none ${n.status === "ok" ? "text-muted" : n.status === "down" ? "text-red" : "text-faint"}`}
                       >
                         {GLYPH[n.kind]}
                       </span>
-                      <span className="truncate font-mono text-[11px] font-semibold">{n.label}</span>
+                      <span className="truncate text-[12.5px] font-semibold">{n.label}</span>
                     </div>
-                    <div className="mt-0.5 truncate text-[10.5px] italic leading-tight text-ink/70">{ROLE[n.kind]}</div>
-                    <div className="mt-0.5 line-clamp-1 whitespace-pre-line font-mono text-[9px] leading-tight text-faint" title={n.sub}>
+                    <div className="mt-0.5 truncate text-[11.5px] leading-tight text-ink/70">{ROLE[n.kind]}</div>
+                    <div className="mt-0.5 line-clamp-1 whitespace-pre-line font-mono text-[10px] leading-tight text-faint" title={n.sub}>
                       {n.sub}
                     </div>
                     {tags?.[n.id]?.length ? (
                       <div className="mt-1 flex flex-wrap gap-0.5">
                         {tags[n.id].map((tg) => (
-                          <span key={tg} className="rounded bg-teal/15 px-1 font-mono text-[9px] leading-4 text-teal">
+                          <span key={tg} className="rounded bg-teal/15 px-1.5 font-mono text-[10.5px] leading-4 text-teal">
                             {tg}
                           </span>
                         ))}
@@ -302,7 +312,7 @@ export default function ServerMap(props: ServerMapProps) {
                       key={x.label}
                       type="button"
                       onClick={() => onToggle?.(x.node, x.label)}
-                      className={`mt-1 flex w-full items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] transition ${
+                      className={`mt-1 flex w-full items-center justify-between gap-1 rounded-md border px-2 py-1 text-[11.5px] transition ${
                         x.on ? "border-teal/60 bg-teal/10 text-teal" : "border-red/60 bg-red/10 text-red"
                       }`}
                     >
@@ -322,7 +332,7 @@ export default function ServerMap(props: ServerMapProps) {
           <motion.div
             key={packet.key}
             className={`pointer-events-none absolute z-20 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${
-              packet.failed ? "bg-red shadow-[0_0_14px_4px_rgba(255,93,79,0.7)]" : "bg-teal shadow-[0_0_14px_4px_rgba(255,255,255,0.7)]"
+              packet.failed ? "bg-red shadow-[0_0_12px_3px_rgba(248,86,78,0.6)]" : "bg-teal shadow-[0_0_12px_3px_rgba(62,207,116,0.6)]"
             }`}
             initial={{ left: `${packet.pts[0].x}%`, top: `${packet.pts[0].y}%`, opacity: 1, scale: 1 }}
             animate={{
@@ -338,7 +348,7 @@ export default function ServerMap(props: ServerMapProps) {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             className={`absolute bottom-2 left-2 right-2 z-30 rounded-md border px-2 py-1.5 font-mono text-[11px] leading-snug shadow-lg ${
-              bubble.ok ? "border-line2 bg-bg text-ink" : "border-red/70 bg-bg text-red"
+              bubble.ok ? "border-teal/60 bg-bg text-teal" : "border-red/70 bg-bg text-red"
             }`}
           >
             {bubble.text}

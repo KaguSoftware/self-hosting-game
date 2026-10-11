@@ -111,7 +111,7 @@ export function SpotTask({ step, task, cb, done }: { step: Step; task: Of<"spot"
 
   return (
     <div className="space-y-2">
-      <p className="font-mono text-[12px] text-muted">
+      <p className="text-[14px] text-muted">
         {task.prompt}
         {task.bugs.length > 1 ? ` (${task.bugs.length - found.length} left)` : ""}
       </p>
@@ -192,7 +192,7 @@ export function OrderTask({ step, task, cb, done }: { step: Step; task: Of<"orde
 
   return (
     <div className="space-y-3">
-      <p className="font-mono text-[12px] text-muted">{task.prompt}</p>
+      <p className="text-[14px] text-muted">{task.prompt}</p>
       <Reorder.Group axis="y" values={order} onReorder={(v) => { setOrder(v); setChecked(null); }} className="space-y-1.5">
         {order.map((item, i) => (
           <Reorder.Item
@@ -274,7 +274,7 @@ export function MatchTask({ step, task, cb, done }: { step: Step; task: Of<"matc
 
   return (
     <div className="space-y-3">
-      <p className="font-mono text-[12px] text-muted">{task.prompt}</p>
+      <p className="text-[14px] text-muted">{task.prompt}</p>
       <div className="flex min-h-10 flex-wrap gap-1.5">
         {task.items.map((it, i) =>
           placed[i] !== undefined ? null : (
@@ -659,7 +659,7 @@ export function AllocateTask({ step, task, cb, done }: { step: Step; task: Of<"a
 
   return (
     <div className="space-y-4">
-      <p className="font-mono text-[12px] text-muted">{task.prompt}</p>
+      <p className="text-[14px] text-muted">{task.prompt}</p>
       <div className="rounded-xl border border-amber/40 bg-amber/[0.03] p-3">
         <div className="mb-2 font-display text-xl text-amber glow">PHYSICAL HOST · {task.host.cpus} cores · {task.host.ramGb} GB</div>
         <div className="space-y-2">

@@ -17,12 +17,12 @@ export interface TerminalProps {
 const kindClass: Record<string, string> = {
   out: "text-ink/90",
   err: "text-red/90",
-  info: "text-teal",
-  cmd: "text-amber",
-  sys: "text-teal/80 italic",
+  info: "text-ink/70",
+  cmd: "text-ink",
+  sys: "text-muted italic",
 };
 
-export default function Terminal({ chips = [], allowConsole, onCommand, disabled, height = "h-[46vh] md:h-[52vh]" }: TerminalProps) {
+export default function Terminal({ chips = [], allowConsole, onCommand, disabled, height = "h-[34vh] md:h-[min(36vh,340px)]" }: TerminalProps) {
   const { state, active, lines, editor } = usePlay();
   const run = usePlay((s) => s.run);
   const [input, setInput] = useState("");
@@ -134,17 +134,17 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
       {/* tabs */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-line bg-panel/80 px-2 py-1.5 scroll-thin">
         <span className="mr-1 flex gap-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-red/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-yellow/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-teal/70" />
+          <span className="h-2.5 w-2.5 rounded-full bg-line2" />
+          <span className="h-2.5 w-2.5 rounded-full bg-line2" />
+          <span className="h-2.5 w-2.5 rounded-full bg-line2" />
         </span>
         {state.shells.map((_, i) => (
           <button
             key={i}
             type="button"
             onClick={() => usePlay.getState().setActive(i)}
-            className={`shrink-0 rounded-md px-2 py-0.5 font-mono text-[11px] transition ${
-              i === active ? "bg-amber/15 text-amber" : "text-muted hover:text-ink"
+            className={`shrink-0 rounded-md px-2 py-0.5 font-mono text-[12px] transition ${
+              i === active ? "bg-panel2 text-ink" : "text-muted hover:text-ink"
             }`}
           >
             {label(i)}
@@ -157,7 +157,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
             sfx.tap();
             usePlay.getState().addWindow(undefined, "New window on your laptop.");
           }}
-          className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[12px] text-muted hover:bg-panel2 hover:text-amber"
+          className="shrink-0 rounded-md px-2 py-0.5 font-mono text-[12px] text-muted hover:bg-panel2 hover:text-ink"
         >
           + window
         </button>
@@ -171,7 +171,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
                 .getState()
                 .addWindow(CONSOLE_FRAME, "Provider web console. You are root on web-1, connected through the provider, not SSH.");
             }}
-            className="ml-auto shrink-0 rounded-md border border-teal/50 px-2 py-0.5 font-mono text-[11px] text-teal hover:bg-teal/10"
+            className="ml-auto shrink-0 rounded-md border border-line2 px-2 py-0.5 font-mono text-[11px] text-ink hover:border-ink"
           >
             open provider console
           </button>
@@ -184,7 +184,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
         onClick={() => {
           if (!window.getSelection()?.toString()) inputRef.current?.focus();
         }}
-        className={`${height} overflow-y-auto px-3 py-2 font-mono text-[12.5px] leading-[1.45] scroll-thin md:text-[13px]`}
+        className={`${height} overflow-y-auto px-4 py-3 font-mono text-[13px] leading-[1.5] scroll-thin`}
       >
         {myLines.map((l) => (
           <pre key={l.id} className={`whitespace-pre-wrap break-words ${kindClass[l.kind] ?? ""}`}>
@@ -193,7 +193,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
           </pre>
         ))}
         <div className="flex items-start">
-          <pre className="whitespace-pre-wrap break-all text-amber">{prompt}</pre>
+          <pre className="whitespace-pre-wrap break-all text-muted">{prompt}</pre>
           <div className="relative min-w-[2ch] flex-1">
             <input
               ref={inputRef}
@@ -210,7 +210,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
               autoCorrect="off"
               spellCheck={false}
               aria-label="Terminal input"
-              className={`w-full bg-transparent font-mono focus-visible:outline-none text-[12.5px] text-ink caret-amber outline-none md:text-[13px] ${pending?.secret ? "text-transparent" : ""}`}
+              className={`w-full bg-transparent font-mono text-[13px] text-ink caret-ink outline-none focus-visible:outline-none ${pending?.secret ? "text-transparent" : ""}`}
             />
             {pending?.secret && <span className="pointer-events-none absolute left-0 top-0 text-faint">{input ? "(hidden)" : ""}</span>}
           </div>
@@ -225,7 +225,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
             key={c}
             type="button"
             onClick={() => tapChip(c)}
-            className="shrink-0 rounded-md border border-line2 bg-panel2 px-2 py-1 font-mono text-[11px] text-ink/90 hover:border-amber hover:text-amber"
+            className="shrink-0 rounded-md border border-line2 bg-panel2 px-2.5 py-1 font-mono text-[12px] text-ink/90 hover:border-ink"
           >
             {c}
           </button>
@@ -245,7 +245,7 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
         <button
           type="button"
           onClick={() => submit(input)}
-          className="shrink-0 rounded-md bg-amber px-3 py-1 font-mono text-[11px] font-bold text-bg md:hidden"
+          className="shrink-0 rounded-md bg-ink px-3 py-1 font-mono text-[12px] font-bold text-bg md:hidden"
         >
           Run ↵
         </button>

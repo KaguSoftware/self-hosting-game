@@ -58,7 +58,7 @@ export default function ProfilePage() {
               </span>
             </div>
             <div className="mt-1 h-2 overflow-hidden rounded-full bg-line">
-              <div className="h-full bg-teal" style={{ width: `${(into / need) * 100}%` }} />
+              <div className="h-full bg-ink" style={{ width: `${(into / need) * 100}%` }} />
             </div>
           </div>
         </section>
@@ -123,7 +123,7 @@ export default function ProfilePage() {
           {cloud.player ? (
             <div className="flex flex-wrap items-center gap-3 font-mono text-[13px]">
               <span>
-                player <span className="text-teal">{cloud.player}</span> · {cloud.status}
+                player <span className="text-ink">{cloud.player}</span> · {cloud.status}
               </span>
               <Btn kind="ghost" onClick={() => void cloud.push()}>
                 Save now

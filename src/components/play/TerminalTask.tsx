@@ -79,28 +79,30 @@ export default function TerminalTask({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-line bg-panel/60 px-3 py-2">
-        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.25em] text-muted">Goal</div>
-        <GoalList goals={task.goals} met={met} />
-      </div>
-      {task.guide && !done && (
-        <div className="rounded-lg border border-line2 bg-panel2/60 px-3 py-2">
-          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.25em] text-muted">Type this, then press Enter</div>
-          <div className="flex flex-wrap gap-2">
-            {task.guide.map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => usePlay.getState().typeIn(g)}
-                className="rounded-md border border-ink/40 bg-bg px-2.5 py-1 font-mono text-[14px] text-ink hover:border-ink"
-                title="Tap to type it in"
-              >
-                {g}
-              </button>
-            ))}
-          </div>
+      <div className={`grid gap-3 ${task.guide && !done ? "sm:grid-cols-2" : ""}`}>
+        <div className="rounded-xl border border-line bg-panel px-4 py-3">
+          <div className="mb-2 text-[12px] text-muted">Goal</div>
+          <GoalList goals={task.goals} met={met} />
         </div>
-      )}
+        {task.guide && !done && (
+          <div className="rounded-xl border border-line2 bg-panel2/60 px-4 py-3">
+            <div className="mb-2 text-[12px] text-muted">Type this and press Enter, or tap it</div>
+            <div className="flex flex-wrap gap-2">
+              {task.guide.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => usePlay.getState().typeIn(g)}
+                  className="rounded-md border border-ink/40 bg-bg px-2.5 py-1 font-mono text-[14px] text-ink hover:border-ink"
+                  title="Tap to type it in"
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       <Terminal
         chips={task.chips}
         allowConsole={allowConsole || task.console}

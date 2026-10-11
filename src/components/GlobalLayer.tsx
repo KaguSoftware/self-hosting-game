@@ -67,7 +67,7 @@ function Toasts() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10 }}
             className={`rounded-lg border px-3 py-1.5 font-mono text-[13px] shadow-lg ${
-              t.kind === "xp" ? "border-amber/50 bg-panel text-amber glow" : t.kind === "warn" ? "border-red/50 bg-panel text-red" : "border-teal/50 bg-panel text-teal"
+              t.kind === "xp" ? "border-amber/50 bg-panel text-amber glow" : t.kind === "warn" ? "border-red/50 bg-panel text-red" : "border-line2 bg-panel text-ink"
             }`}
           >
             {t.text}
@@ -129,8 +129,8 @@ function Dictionary() {
                   </div>
                   <p className="mt-1 text-[13.5px] leading-snug text-ink/90">{t.plain}</p>
                   {t.replaces && (
-                    <p className="mt-1 text-[12.5px] text-teal/90">
-                      <span className="font-mono text-[10px] uppercase tracking-wider text-teal/70">replaces </span>
+                    <p className="mt-1 text-[12.5px] text-muted">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-faint">replaces </span>
                       {t.replaces}
                     </p>
                   )}

@@ -23,15 +23,15 @@ export default function Home() {
       <main className="mx-auto max-w-3xl px-4 pb-24">
         {hydrated && doneCount === 0 && (
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 rounded-2xl border border-amber/30 bg-panel/70 p-5 box-glow">
-            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-teal">Incoming message</div>
-            <p className="mt-2 font-display text-[22px] leading-tight text-ink">You are the new head of infrastructure.</p>
+            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted">Incoming message</div>
+            <p className="mt-2 text-[24px] font-semibold leading-tight text-ink">You are the new head of infrastructure.</p>
             <p className="mt-1 text-[15px] text-ink/85">
               No Vercel. No Supabase. One empty server, a client app called Crumb, and a pager. Build it, break it, fix it.
             </p>
             <Link
               href={`/play/${LEVELS[0].id}`}
               onClick={() => sfx.tap()}
-              className="mt-4 inline-block rounded-lg bg-amber px-5 py-2 font-mono text-[14px] font-bold text-bg shadow-[0_3px_0_#4a4a4a] hover:bg-amber2"
+              className="mt-4 inline-block rounded-lg bg-ink px-5 py-2.5 text-[14px] font-semibold text-bg hover:bg-white"
             >
               Start the first mission
             </Link>
@@ -48,7 +48,7 @@ export default function Home() {
               <div className={`sticky top-[52px] z-10 -mx-2 mb-4 flex items-center gap-3 rounded-xl border px-4 py-3 backdrop-blur ${worldOpen ? "border-line bg-panel/90" : "border-line/60 bg-bg2/80 opacity-60"}`}>
                 <div className="font-display text-3xl leading-none text-muted">{w.id < 0 ? ">" : String(w.id).padStart(2, "0")}</div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-display text-lg leading-tight text-ink">{w.title}</div>
+                  <div className="truncate text-[18px] font-semibold leading-tight text-ink">{w.title}</div>
                   <div className="truncate text-[12.5px] text-muted">{w.tagline}</div>
                 </div>
                 <div className="text-right">
@@ -56,7 +56,7 @@ export default function Home() {
                     {done}/{levels.length}
                   </div>
                   {worldDone && (
-                    <button type="button" onClick={() => setSheet(w)} className="mt-0.5 rounded border border-teal/50 px-1.5 font-mono text-[10px] text-teal hover:bg-teal/10">
+                    <button type="button" onClick={() => setSheet(w)} className="mt-0.5 rounded border border-line2 px-1.5 font-mono text-[10px] text-ink hover:border-ink">
                       cheat sheet
                     </button>
                   )}
@@ -115,7 +115,7 @@ export default function Home() {
                       ) : (
                         <div aria-label={`${l.title} (locked)`}>{node}</div>
                       )}
-                      <div className={`mt-3 max-w-40 text-center font-mono text-[11.5px] leading-tight ${isOpen ? "text-ink/85" : "text-faint"}`}>{l.title}</div>
+                      <div className={`mt-3 max-w-40 text-center text-[13px] leading-tight ${isOpen ? "text-ink" : "text-muted"}`}>{l.title}</div>
                     </div>
                   );
                 })}
@@ -141,9 +141,9 @@ export default function Home() {
       <AnimatePresence>
         {sheet && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4" onClick={() => setSheet(null)}>
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-teal/40 bg-panel p-5 scroll-thin">
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} onClick={(e) => e.stopPropagation()} className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line2 bg-panel p-5 scroll-thin">
               <div className="flex items-center">
-                <div className="font-display text-3xl text-teal glow-teal">Cheat sheet · {sheet.title}</div>
+                <div className="font-display text-xl text-ink">Cheat sheet · {sheet.title}</div>
                 <button type="button" onClick={() => setSheet(null)} className="ml-auto font-mono text-muted hover:text-amber">
                   ✕
                 </button>

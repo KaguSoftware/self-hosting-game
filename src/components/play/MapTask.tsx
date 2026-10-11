@@ -150,7 +150,7 @@ export default function MapTask({ step, task, cb, done }: { step: Step; task: T;
 
   return (
     <div className="space-y-3">
-      <p className="font-mono text-[12.5px] text-muted">{task.prompt}</p>
+      <p className="text-[14px] text-muted">{task.prompt}</p>
       {task.mode === "match" && (
         <div className="flex flex-wrap gap-1.5">
           {task.pairs.map((p, i) =>
@@ -163,8 +163,8 @@ export default function MapTask({ step, task, cb, done }: { step: Step; task: T;
                   sfx.tap();
                   setChip(chip === i ? null : i);
                 }}
-                className={`rounded-md border px-2.5 py-1 font-mono text-[12px] transition ${
-                  chip === i ? "border-teal bg-teal/15 text-teal shadow-[0_0_12px_rgba(255,255,255,0.35)]" : "border-line2 bg-panel2 text-ink hover:border-amber"
+                className={`rounded-md border px-3 py-1.5 text-[13.5px] transition ${
+                  chip === i ? "border-ink bg-ink text-bg" : "border-line2 bg-panel2 text-ink hover:border-ink"
                 }`}
               >
                 {p.chip}
