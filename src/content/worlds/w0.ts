@@ -25,9 +25,9 @@ export const world0: WorldDef = {
       steps: [
         {
           id: "w0-01-a",
-          mission: "This is where you are headed. Tag what Vercel and Supabase used to do for you.",
+          mission: "Tag what Vercel and Supabase used to do for you.",
           intel: {
-            lines: ["On Vercel you pushed code. Their computers did all of this for you.", "Each box is one job you now do yourself. The italic text says what it is."],
+            lines: ["On Vercel, their computers did all of this for you.", "Each box is one job. Its plain job is written under its name.", "Caddy is the front desk: it greets visitors and handles HTTPS."],
             terms: ["dns", "reverse-proxy"],
           },
           task: {
@@ -51,6 +51,8 @@ export const world0: WorldDef = {
             why: "Caddy sits at the front door and gets free certificates from Let's Encrypt.",
             tag: "big-picture",
           },
+          basis: { taught: ["self"] },
+          teaches: ["DNS", "firewall", "ufw", "Caddy"],
           tags: ["big-picture"],
         },
         {
@@ -63,6 +65,7 @@ export const world0: WorldDef = {
             answer: 0,
             why: "Caddy is the front desk. It is the only box visitors talk to. The app and database stay hidden behind it.",
           },
+          basis: { taught: ["w0-01-a"] },
           tags: ["big-picture", "proxy"],
         },
       ],
@@ -94,6 +97,7 @@ export const world0: WorldDef = {
             why: "Once the browser has the IP, packets hit the provider's firewall first.",
             tag: "big-picture",
           },
+          basis: { taught: ["self"] },
           tags: ["big-picture"],
         },
         {
@@ -106,6 +110,7 @@ export const world0: WorldDef = {
             answer: 1,
             why: "DNS is an address book. Name in, number out. That number is called an IP address.",
           },
+          basis: { taught: ["st-04-a"] },
           tags: ["dns"],
         },
       ],
@@ -128,6 +133,7 @@ export const world0: WorldDef = {
             why: "No address, no trip. The browser says it cannot find the server.",
             playout: { actions: [{ type: "dnsA", name: "crumb.shop", value: null }], url: URL },
           },
+          basis: { taught: ["w0-02-b"] },
           tags: ["dns", "debugging"],
         },
         {
@@ -168,6 +174,7 @@ export const world0: WorldDef = {
             why: "A firewall ignores blocked visitors. No answer at all, so the browser waits, then gives up.",
             playout: { actions: [{ type: "pfwRule", port: 443, on: false }], url: URL },
           },
+          basis: { guess: true },
           tags: ["firewall", "debugging"],
         },
         {
@@ -181,6 +188,8 @@ export const world0: WorldDef = {
             why: "The front desk reached the app, so no 502. But the app could not get its data, so it shows error 500.",
             playout: { actions: [{ type: "container", name: "crumb-app-1", running: true }, { type: "container", name: "crumb-db-1", running: false }], url: URL },
           },
+          basis: { guess: true },
+          teaches: ["500"],
           tags: ["debugging", "postgres"],
         },
       ],
@@ -194,7 +203,7 @@ export const world0: WorldDef = {
       steps: [
         {
           id: "w0-04-a",
-          mission: "Ask crumb.shop for its headers from your laptop.",
+          mission: "From your laptop, ask crumb.shop for a quick status check.",
           intel: {
             lines: ["curl fetches a web page from the terminal.", "-I asks only for the short summary. Its first line has a number: 200 means OK."],
             terms: ["curl", "status-code"],
@@ -211,7 +220,7 @@ export const world0: WorldDef = {
           review: {
             id: "w0-04-a-q",
             q: "What does curl -I show?",
-            options: ["Only the response headers", "The full page", "The server's files"],
+            options: ["Only a short status summary", "The full page", "The server's files"],
             answer: 0,
             why: "-I means HEAD: just the status line and headers.",
             tag: "curl",
@@ -221,7 +230,7 @@ export const world0: WorldDef = {
         },
         {
           id: "w0-04-b",
-          mission: "We stop the app container on the server.",
+          mission: "We switch off the app on the server.",
           task: {
             kind: "predict",
             question: "What will curl -I print now?",
@@ -230,6 +239,7 @@ export const world0: WorldDef = {
             why: "DNS and Caddy still work. Caddy has no app to pass the request to.",
             playout: { actions: [{ type: "container", name: "crumb-app-1", running: false }], url: URL, persist: true },
           },
+          basis: { taught: ["w0-03-c"] },
           tags: ["curl", "debugging"],
         },
         {
@@ -277,8 +287,8 @@ export const world0: WorldDef = {
             prompt: "Drag or use the arrows. Top is first.",
             items: [
               "Browser asks DNS for the IP",
-              "Provider firewall lets port 443 in",
-              "ufw on the server lets it in",
+              "The front gate (provider firewall) lets web visitors in",
+              "The door lock on the server (ufw) lets it in",
               "Caddy matches the domain and handles HTTPS",
               "Next.js builds the page",
               "Postgres returns the rows",
@@ -293,6 +303,7 @@ export const world0: WorldDef = {
             why: "The provider's firewall sits in front of your whole server.",
             tag: "big-picture",
           },
+          basis: { taught: ["w0-02-a"] },
           tags: ["big-picture"],
         },
         {
@@ -312,6 +323,7 @@ export const world0: WorldDef = {
             ],
             why: "Now you own all of it. Each job becomes a box on your server.",
           },
+          basis: { known: "You used Vercel for hosting and Supabase for the database, auth and storage." },
           tags: ["big-picture"],
         },
       ],
@@ -329,15 +341,16 @@ export const world0: WorldDef = {
             kind: "rapid",
             seconds: 30,
             items: [
-              { id: "w0-r1", q: "DNS turns a name into...", options: ["an IP address", "a certificate", "a container"], answer: 0, why: "Name in, IP out.", tag: "dns" },
-              { id: "w0-r2", q: "502 Bad Gateway means...", options: ["DNS is broken", "nothing answered behind the proxy", "the database is full"], answer: 1, why: "The proxy is up, the app is not.", tag: "debugging" },
+              { id: "w0-r1", q: "DNS turns a name into...", options: ["an IP address", "a certificate", "a password"], answer: 0, why: "Name in, IP out.", tag: "dns" },
+              { id: "w0-r2", q: "502 Bad Gateway means...", options: ["DNS is broken", "nothing answered behind the front desk", "the database is full"], answer: 1, why: "The proxy is up, the app is not.", tag: "debugging" },
               { id: "w0-r3", q: "When a firewall blocks you, it usually looks like...", options: ["an instant error", "waiting, then a timeout", "a 404"], answer: 1, why: "Dropped packets mean silence, then timeout.", tag: "firewall" },
               { id: "w0-r4", q: "Which box is the front desk that visitors reach?", options: ["Caddy", "Postgres", "ufw"], answer: 0, why: "Caddy greets every visitor and passes them on.", tag: "proxy" },
               { id: "w0-r5", q: "App up, database down. The visitor sees...", options: ["500", "502", "timeout"], answer: 0, why: "The app answers, but with an error.", tag: "debugging" },
               { id: "w0-r6", q: "What replaced Supabase on your server?", options: ["Caddy", "Postgres (plus your own auth and storage)", "DNS"], answer: 1, why: "Supabase is mostly Postgres with extras.", tag: "big-picture" },
-              { id: "w0-r7", q: "curl -I shows...", options: ["headers", "the whole page", "the server's disk"], answer: 0, why: "-I is a HEAD request.", tag: "curl" },
+              { id: "w0-r7", q: "curl -I shows...", options: ["a short status summary", "the whole page", "the server's disk"], answer: 0, why: "-I asks only for the summary, not the page.", tag: "curl" },
             ],
           },
+          basis: { taught: ["w0-02-b", "w0-03-c", "w0-03-b", "w0-01-a", "w0-03-d", "w0-05-b", "w0-04-a"] },
           tags: ["big-picture"],
         },
       ],

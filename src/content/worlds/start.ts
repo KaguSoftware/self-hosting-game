@@ -65,6 +65,8 @@ export const worldStart: WorldDef = {
             answer: 0,
             why: "ls is short for list. Short names are normal in the terminal. You get used to them fast.",
           },
+          basis: { guess: true },
+          teaches: ["ls"],
           tags: ["terminal-basics"],
         },
         {
@@ -98,6 +100,8 @@ export const worldStart: WorldDef = {
             answer: 0,
             why: "cd means change directory. Directory is just another word for folder.",
           },
+          basis: { guess: true },
+          teaches: ["cd"],
           tags: ["terminal-basics"],
         },
         {
@@ -136,6 +140,7 @@ export const worldStart: WorldDef = {
             answer: 0,
             why: "Two dots always mean the folder above. cd .. goes up one level.",
           },
+          basis: { guess: true },
           tags: ["terminal-basics"],
         },
         {
@@ -173,13 +178,14 @@ export const worldStart: WorldDef = {
               { text: "ls", bucket: 0 },
               { text: "-l", bucket: 1 },
               { text: "code", bucket: 2 },
-              { text: "cat", bucket: 0 },
+              { text: "whoami", bucket: 0 },
               { text: "-a", bucket: 1 },
               { text: "notes.txt", bucket: 2 },
             ],
             why: "So ls -l code means: list, with details, the folder code.",
           },
           review: { id: "st-03-a-q", q: "In ls -l code, which part is the option?", options: ["ls", "-l", "code"], answer: 1, why: "Options start with a dash.", tag: "terminal-basics" },
+          basis: { taught: ["self"] },
           tags: ["terminal-basics"],
         },
         {
@@ -220,6 +226,7 @@ export const worldStart: WorldDef = {
             answer: 1,
             why: "Typos are harmless. Read the message, fix it, try again. Try it in the terminal any time.",
           },
+          basis: { guess: true },
           tags: ["terminal-basics"],
         },
       ],
@@ -233,7 +240,7 @@ export const worldStart: WorldDef = {
         {
           id: "st-04-a",
           mission: "You type crumb.shop and press Enter. Put what happens in order.",
-          intel: { lines: ["Every website is a program running on some computer, waiting for visitors."] },
+          intel: { lines: ["Every website is a program running on some computer, waiting for visitors.", "Computers find each other by number, called an IP address, like 203.0.113.10."] },
           task: {
             kind: "order",
             prompt: "Drag, or use the arrows. Top is first.",
@@ -247,6 +254,7 @@ export const worldStart: WorldDef = {
             why: "That is the whole web. The next world shows every stop along the way.",
           },
           review: { id: "st-04-a-q", q: "Before it can send a request, what does the browser need?", options: ["The server's number (IP address)", "A password", "The database"], answer: 0, why: "Names are for people. Computers connect to numbers.", tag: "big-picture" },
+          basis: { guess: true },
           tags: ["big-picture"],
         },
         {
@@ -259,6 +267,7 @@ export const worldStart: WorldDef = {
             answer: 1,
             why: "A server is just a computer in a building. In this game you learn to run your own.",
           },
+          basis: { known: "You used Vercel and Supabase, so you know they ran things for you." },
           tags: ["big-picture"],
         },
         {
@@ -275,6 +284,7 @@ export const worldStart: WorldDef = {
               { id: "st-r5", q: "Options usually start with...", options: ["a dash, like -l", "a dot", "a slash"], answer: 0, why: "ls -l, curl -I, and so on.", tag: "terminal-basics" },
             ],
           },
+          basis: { taught: ["st-01-b", "st-01-d", "st-02-c", "st-03-a", "st-03-c"] },
           tags: ["terminal-basics"],
         },
       ],

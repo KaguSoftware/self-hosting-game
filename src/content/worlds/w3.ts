@@ -49,6 +49,7 @@ export const world3: WorldDef = {
             answer: 1,
             why: "Servers get padlocks. Only your laptop holds the key that opens them.",
           },
+          basis: { taught: ["self"] },
           tags: ["ssh-keys"],
         },
         {
@@ -90,7 +91,8 @@ export const world3: WorldDef = {
       steps: [
         {
           id: "w3-02-c",
-          mission: "Before you install your key: sshd is picky about who can write near keys. Tap the line it would refuse.",
+          mission: "Before you install your key: SSH is picky about who can write near keys. Tap the line it would refuse.",
+          intel: { lines: ["A server keeps the padlocks it trusts in a file called authorized_keys.", "If others could change that file, they could add their own padlock."] },
           task: {
             kind: "spot",
             prompt: "ls -la /home/sam/.ssh on another server",
@@ -105,6 +107,7 @@ export const world3: WorldDef = {
             why: "If anyone else can write authorized_keys, they could add their own key. sshd ignores it. Use 600.",
           },
           review: { id: "w3-02-c-q", q: "Right mode for authorized_keys?", options: ["600", "666", "777"], answer: 0, why: "Owner read/write only.", tag: "ssh-keys" },
+          basis: { taught: ["self", "w2-04-a"] },
           tags: ["ssh-keys", "permissions"],
         },
         {
@@ -166,6 +169,7 @@ export const world3: WorldDef = {
             why: "Every step keeps a working way in until the next one is proven.",
           },
           review: { id: "w3-03-a-q", q: "Which comes first?", options: ["ufw allow OpenSSH", "ufw enable"], answer: 0, why: "Allow first, or new SSH logins get blocked.", tag: "hardening" },
+          basis: { guess: true },
           tags: ["hardening"],
         },
         {
@@ -178,6 +182,7 @@ export const world3: WorldDef = {
             answer: 1,
             why: "Open sessions survive config changes. That window is your safety rope.",
           },
+          basis: { guess: true },
           tags: ["hardening"],
         },
       ],
@@ -201,6 +206,7 @@ export const world3: WorldDef = {
             why: "ufw keeps existing connections alive. The trap springs the moment you log out.",
             playout: { actions: [{ type: "ufw", enabled: true }], ssh: { user: "deploy" } },
           },
+          basis: { guess: true },
           tags: ["firewall", "hardening"],
         },
         {
@@ -342,6 +348,7 @@ export const world3: WorldDef = {
             bugs: [1],
             why: "Someone made /home/sam/.ssh writable by others. sshd ignores every key inside.",
           },
+          basis: { taught: ["self"] },
           tags: ["ssh", "logs"],
         },
         {
@@ -354,6 +361,7 @@ export const world3: WorldDef = {
             answer: 0,
             why: "The service is named ssh on Ubuntu. /var/log/auth.log has the same lines.",
           },
+          basis: { taught: ["w2-06-d"] },
           tags: ["ssh", "logs"],
         },
       ],

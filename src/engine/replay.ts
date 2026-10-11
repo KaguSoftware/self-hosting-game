@@ -61,6 +61,9 @@ export function applyStep(state: PlayState, step: Step, vars: Vars): PlayState {
     case "predict":
       if (t.playout?.persist) return { ...state, world: applyMapActions(state.world, t.playout.actions) };
       return state;
+    case "budget":
+      if (t.apply) return { ...state, world: applyMapActions(state.world, t.apply) };
+      return state;
     default:
       return state;
   }

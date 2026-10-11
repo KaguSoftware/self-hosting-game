@@ -15,6 +15,8 @@ import { useProgress } from "@/store/progress";
 import { useUi } from "@/store/ui";
 import ServerMap from "../map/ServerMap";
 import { Btn, MissionCard, type TaskCallbacks, type TaskResult } from "./common";
+import BudgetTask from "./BudgetTask";
+import { isGuess } from "@/content/schema";
 import IncidentTask from "./IncidentTask";
 import MapTask from "./MapTask";
 import { AllocateTask, ConfigTask, MatchTask, OrderTask, PredictTask, RapidTask, SpotTask } from "./QuizTasks";
@@ -72,6 +74,11 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         } else sfx.tap();
       },
       onMistake(quizId) {
+        // A guess is how you learn something new. It is never punished.
+        if (isGuess(step)) {
+          sfx.tap();
+          return;
+        }
         usePlay.getState().breakCombo();
         sfx.error();
         if (quizId) useProgress.getState().miss(quizId);
@@ -79,12 +86,12 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
       onDone(r) {
         const prog = useProgress.getState();
         const combo = usePlay.getState().combo;
-        const wrongGuess = (step.task.kind === "predict" || step.task.kind === "rapid") && r.mistakes > 0 && !r.bonusXp;
+        const wrongGuess = !isGuess(step) && (step.task.kind === "predict" || step.task.kind === "rapid") && r.mistakes > 0 && !r.bonusXp;
         const base = r.usedShowMe ? Math.round(STEP_XP / 2) : wrongGuess ? 3 : STEP_XP;
         const xp = Math.round(base * comboMultiplier(combo)) + (r.bonusXp ?? 0);
         prog.addXp(xp);
         prog.attempt(level.world, r.mistakes === 0 && !r.usedShowMe, step.tags);
-        for (const id of r.missed) prog.miss(id);
+        if (!isGuess(step)) for (const id of r.missed) prog.miss(id);
         setLevelXp((x) => x + xp);
         setFlags((f) => ({ hints: f.hints || r.usedHints, showMe: f.showMe || r.usedShowMe }));
         setResult({ ...r, xp, why: [step.after, r.why].filter(Boolean).join(" ") || undefined });
@@ -188,6 +195,8 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         return <MatchTask key={key} step={step} task={t} cb={cb} done={done} />;
       case "config":
         return <ConfigTask key={key} step={step} task={t} cb={cb} done={done} />;
+      case "budget":
+        return <BudgetTask key={key} step={step} task={t} cb={cb} done={done} />;
       case "allocate":
         return <AllocateTask key={key} step={step} task={t} cb={cb} done={done} />;
       case "incident":
@@ -198,16 +207,18 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
   const due = dueCards(useProgress.getState().review, dayKey()).length;
   const nl = nextLevel(level.id);
 
-  const verdict: "good" | "bad" | "help" | "done" = !result
+  const verdict: "good" | "bad" | "help" | "done" | "learn" = !result
     ? "done"
-    : result.usedShowMe
+    : isGuess(step) && result.mistakes > 0
+      ? "learn"
+      : result.usedShowMe
       ? "help"
       : (t.kind === "predict" || t.kind === "rapid") && result.mistakes > 0
         ? "bad"
         : result.mistakes === 0
           ? "good"
           : "done";
-  const verdictTitle = { good: "Correct!", bad: "Not quite", help: "Solved, with help", done: "Done" }[verdict];
+  const verdictTitle = { good: "Correct!", bad: "Not quite", help: "Solved, with help", done: "Done", learn: "Now you know" }[verdict];
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-[1240px] flex-col px-4 pb-16 md:px-6">
@@ -270,6 +281,14 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
               {mapOpen && <ServerMap world={play.preview ?? play.state.world} trace={play.trace} traceKey={play.traceKey} forceVertical />}
             </div>
           )}
+          {isGuess(step) && !done && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-line2 bg-panel2/60 px-4 py-3 text-[14px] leading-snug text-ink/85">
+              <span className="mt-px font-mono text-[12px] font-semibold text-muted">?</span>
+              <span>
+                <span className="font-semibold text-ink">This one is new. Take a guess.</span> Nothing is lost if you are wrong: the answer teaches you.
+              </span>
+            </div>
+          )}
           {taskEl}
         </main>
         {showSideMap && (
@@ -305,7 +324,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
               exit={{ opacity: 0, y: 12 }}
               transition={{ type: "spring", stiffness: 420, damping: 32 }}
               className={`w-full max-w-md rounded-2xl border bg-panel p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.8)] ${
-                verdict === "bad" ? "border-red/50" : verdict === "help" ? "border-line2" : "border-teal/50"
+                verdict === "bad" ? "border-red/50" : verdict === "help" || verdict === "learn" ? "border-line2" : "border-teal/50"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -314,7 +333,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                   animate={{ scale: 1, rotate: 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 18, delay: 0.05 }}
                   className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-                    verdict === "bad" ? "bg-red/15 text-red" : verdict === "help" ? "bg-panel2 text-ink" : "bg-teal/15 text-teal"
+                    verdict === "bad" ? "bg-red/15 text-red" : verdict === "help" || verdict === "learn" ? "bg-panel2 text-ink" : "bg-teal/15 text-teal"
                   }`}
                   aria-hidden
                 >
@@ -329,7 +348,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                   )}
                 </motion.span>
                 <div className="min-w-0 flex-1">
-                  <div id="result-title" className={`text-[20px] font-semibold leading-tight ${verdict === "bad" ? "text-red" : verdict === "help" ? "text-ink" : "text-teal"}`}>
+                  <div id="result-title" className={`text-[20px] font-semibold leading-tight ${verdict === "bad" ? "text-red" : verdict === "help" || verdict === "learn" ? "text-ink" : "text-teal"}`}>
                     {verdictTitle}
                   </div>
                   <div className="mt-0.5 font-mono text-[12px] text-muted">
@@ -338,7 +357,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                 </div>
               </div>
               {result.why && <p className="mt-4 text-[15px] leading-relaxed text-ink/90">{result.why}</p>}
-              <Btn kind={verdict === "bad" || verdict === "help" ? "primary" : "teal"} onClick={next} className="mt-5 w-full">
+              <Btn kind={verdict === "bad" || verdict === "help" || verdict === "learn" ? "primary" : "teal"} onClick={next} className="mt-5 w-full">
                 {stepIdx + 1 < level.steps.length ? "Continue" : "Finish level"} <span className="ml-1 font-mono text-[12px] opacity-60">↵</span>
               </Btn>
             </motion.div>

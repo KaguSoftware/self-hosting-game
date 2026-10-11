@@ -83,6 +83,7 @@ export const world2: WorldDef = {
             answer: 0,
             why: ".. means one folder up. Twice up from /var/log is /.",
           },
+          basis: { taught: ["st-02-c"] },
           tags: ["linux-nav"],
         },
         {
@@ -127,6 +128,7 @@ export const world2: WorldDef = {
             why: "When something breaks: settings in /etc, clues in /var/log.",
           },
           review: { id: "w2-02-a-q", q: "Where do settings files live?", options: ["/etc", "/srv", "/var/log"], answer: 0, why: "/etc holds config.", tag: "linux-nav" },
+          basis: { taught: ["self"] },
           tags: ["linux-nav"],
         },
         {
@@ -164,6 +166,7 @@ export const world2: WorldDef = {
             answer: 1,
             why: "Every bot on the internet tries root. Your own username is one more thing to guess.",
           },
+          basis: { taught: ["self"] },
           tags: ["sudo"],
         },
         {
@@ -190,7 +193,7 @@ export const world2: WorldDef = {
         {
           id: "w2-03-c",
           mission: "Become deploy. Try apt update without sudo, then with sudo.",
-          intel: { lines: ["su - deploy switches you to deploy.", "sudo asks for deploy's OWN password, not root's."] },
+          intel: { lines: ["su - deploy switches you to deploy.", "apt update refreshes the list of software you can install. It needs root powers.", "sudo asks for deploy's OWN password, not root's."] },
           task: {
             kind: "terminal",
             goals: [
@@ -241,7 +244,8 @@ export const world2: WorldDef = {
             bugs: [3],
             why: "rwxrwxrwx is 777: every user and program on the box can read AND change your secrets.",
           },
-          review: { id: "w2-04-a-q", q: "What does chmod 777 mean?", options: ["Only the owner can use it", "Everyone can read, write and run it", "Nobody can open it"], answer: 1, why: "7 = rwx, for owner, group and everyone.", tag: "permissions" },
+          review: { id: "w2-04-a-q", q: "What does permission 777 mean?", options: ["Only the owner can use it", "Everyone can read, write and run it", "Nobody can open it"], answer: 1, why: "7 = rwx, for owner, group and everyone.", tag: "permissions" },
+          basis: { taught: ["self"] },
           tags: ["permissions"],
         },
         {
@@ -303,6 +307,7 @@ export const world2: WorldDef = {
             answer: 1,
             why: "apt only knows what its list says. Always update first.",
           },
+          basis: { taught: ["self"] },
           tags: ["apt"],
         },
         {
@@ -379,6 +384,7 @@ export const world2: WorldDef = {
             why: "Active is the line to read. Also note disabled: it will not start at boot either.",
           },
           review: { id: "w2-06-a-q", q: "Which systemctl status line tells you if it runs right now?", options: ["Active:", "Loaded:", "Docs:"], answer: 0, why: "Active: active (running) is what you want.", tag: "systemd" },
+          basis: { taught: ["self"] },
           tags: ["systemd"],
         },
         {
@@ -410,12 +416,13 @@ export const world2: WorldDef = {
             answer: 1,
             why: "start only lasts until reboot. enable is what survives one.",
           },
+          basis: { taught: ["w2-06-b"] },
           tags: ["systemd"],
         },
         {
           id: "w2-06-d",
           mission: "Read hello's logs to find which port it serves on.",
-          intel: { lines: ["journalctl -u NAME shows a service's logs.", "Logs are where the answers live. Get used to reading them."], terms: ["journalctl"] },
+          intel: { lines: ["journalctl -u NAME shows a service's logs.", "A port is a numbered door a program listens at.", "Logs are where the answers live."], terms: ["journalctl"] },
           task: {
             kind: "terminal",
             goals: [{ describe: "Find the port in the logs", check: P.saw(/port 8080/, "vps") }],
@@ -460,6 +467,7 @@ export const world2: WorldDef = {
             answer: 1,
             why: "Postgres can't write, logs can't append, apps crash. A full disk takes everything down.",
           },
+          basis: { guess: true },
           tags: ["linux-health"],
         },
         {
@@ -491,6 +499,8 @@ export const world2: WorldDef = {
             answer: 1,
             why: "0.0.0.0 means every network card. 127.0.0.1 would mean only this machine.",
           },
+          basis: { guess: true },
+          teaches: ["0.0.0.0"],
           tags: ["networking"],
         },
       ],
@@ -519,6 +529,7 @@ export const world2: WorldDef = {
               { id: "w2-r8", q: "Install software:", options: ["sudo apt install X", "npm i -g X", "get X"], answer: 0, why: "apt is Ubuntu's package manager.", tag: "apt" },
             ],
           },
+          basis: { taught: ["w2-02-a", "w2-04-b", "w2-03-c", "w2-06-b", "w2-06-d", "w2-07-a", "w2-04-a", "w2-05-b"] },
           tags: ["linux-nav"],
         },
       ],

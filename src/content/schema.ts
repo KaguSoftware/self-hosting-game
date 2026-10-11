@@ -109,6 +109,19 @@ export type Task =
   | { kind: "order"; prompt: string; items: string[]; why: string }
   | { kind: "rapid"; items: QuizItem[]; seconds: number }
   | { kind: "match"; prompt: string; buckets: string[]; items: { text: string; bucket: number }[]; why: string }
+  | {
+      kind: "budget";
+      prompt: string;
+      /** What has to fit in RAM. The player loads each one. */
+      pieces: { name: string; mb: number; note: string }[];
+      plans: { name: string; ramMb: number; cpus: number; price: string }[];
+      /** Index of the cheapest plan that fits. A content test checks the math. */
+      answer: number;
+      why: string;
+      hints: [string, string];
+      /** Applied to the world (kept) when solved. */
+      apply?: MapAction[];
+    }
   | { kind: "incident"; incidentId: string };
 
 export type TaskKind = Task["kind"];
@@ -122,7 +135,23 @@ export interface Step {
   review?: QuizItem;
   /** One plain line shown after success: what just happened. */
   after?: string;
+  /**
+   * Where the knowledge for a question comes from. Required for question-style
+   * steps (predict, spot, order, match, rapid, map route/match, budget):
+   * - taught: earlier step ids that taught it ("self" = this step's own intel or prompt)
+   * - guess: the player cannot know yet. Shown as "take a guess", never punished.
+   * - known: something a Next.js + Vercel + Supabase developer already knows.
+   */
+  basis?: Basis;
+  /** Jargon this step explains (in its intel, after or why), for the jargon check. */
+  teaches?: string[];
   tags: string[];
+}
+
+export type Basis = { taught: string[] } | { guess: true } | { known: string };
+
+export function isGuess(s: Step): boolean {
+  return !!s.basis && "guess" in s.basis;
 }
 
 export type StartPreset = "laptop" | "vps-root" | "vps-deploy";
