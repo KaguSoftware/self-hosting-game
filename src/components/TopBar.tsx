@@ -5,6 +5,7 @@ import { dayKey, dueCards, levelFromXp, liveStreak, rankFor } from "@/engine/rul
 import { useProgress } from "@/store/progress";
 import { useUi } from "@/store/ui";
 import { useCloud } from "@/store/cloud";
+import { Logo } from "@/components/brand/Logo";
 
 export default function TopBar() {
   const p = useProgress();
@@ -15,8 +16,8 @@ export default function TopBar() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
-        <Link href="/" className="font-display text-[17px] leading-none text-ink">
-          self-hosting<span className="text-muted">_</span>
+        <Link href="/" className="text-[17px] text-ink" aria-label="Self-Hosting: back to the map">
+          <Logo size={24} blink />
         </Link>
         <div className="ml-auto flex items-center gap-1.5 font-mono text-[12px]">
           {due > 0 && (

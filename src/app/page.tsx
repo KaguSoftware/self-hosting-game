@@ -6,6 +6,8 @@ import { LEVELS, UPCOMING, WORLDS } from "@/content";
 import { describeFlag, flagsInProse } from "@/content/flags";
 import type { WorldDef } from "@/content/schema";
 import TopBar from "@/components/TopBar";
+import BootSplash from "@/components/brand/BootSplash";
+import { Logo } from "@/components/brand/Logo";
 import { useProgress } from "@/store/progress";
 import { sfx } from "@/lib/sfx";
 
@@ -40,6 +42,7 @@ export default function Home() {
 
   return (
     <>
+      <BootSplash />
       <TopBar />
       <main className="mx-auto max-w-3xl px-4 pb-24">
         {hydrated && doneCount === 0 && (
@@ -163,6 +166,16 @@ export default function Home() {
             </div>
           </section>
         ))}
+
+        <footer className="mt-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-6 text-[13px] text-muted">
+          <span className="text-[15px] text-ink">
+            <Logo size={20} />
+          </span>
+          <span>Learn to run your own server by doing it.</span>
+          <Link href="/brand" className="ml-auto font-mono text-[12px] text-faint hover:text-ink">
+            brand
+          </Link>
+        </footer>
       </main>
 
       <AnimatePresence>
