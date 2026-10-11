@@ -58,6 +58,7 @@ export const INCIDENTS: Incident[] = [
 INCIDENTS.push(
   {
     id: "dns-wrong-a",
+    oncall: { layer: "dns", conflicts: ["cert-new-domain"] },
     title: "The shop vanished",
     client: {
       name: "Riya, who runs the shop",
@@ -97,6 +98,7 @@ INCIDENTS.push(
   },
   {
     id: "pfw-blocks-443",
+    oncall: { layer: "firewall" },
     title: "443 times out",
     client: {
       name: "Your uptime checker",
@@ -142,6 +144,7 @@ INCIDENTS.push(
 INCIDENTS.push(
   {
     id: "crash-loop-env",
+    oncall: { layer: "app" },
     title: "The app keeps restarting",
     client: {
       name: "Sam, your teammate",
@@ -179,6 +182,7 @@ INCIDENTS.push(
   },
   {
     id: "db-localhost",
+    oncall: { layer: "db" },
     title: "Every order fails",
     client: {
       name: "Riya, who runs the shop",
@@ -220,6 +224,7 @@ const reloadCaddy = (w: Parameters<Incident["breakIt"]>[0]) =>
 INCIDENTS.push(
   {
     id: "caddy-typo",
+    oncall: { layer: "proxy" },
     title: "Your connection is not private",
     client: {
       name: "Riya, who runs the shop",
@@ -254,6 +259,7 @@ INCIDENTS.push(
   },
   {
     id: "cert-new-domain",
+    oncall: { layer: "proxy", conflicts: ["dns-wrong-a"] },
     title: "The new address is not secure",
     client: {
       name: "Riya, who runs the shop",
@@ -297,6 +303,7 @@ INCIDENTS.push(
   },
   {
     id: "app-127",
+    oncall: { layer: "app" },
     title: "502 after a rebuild",
     client: {
       name: "Sam, your teammate",

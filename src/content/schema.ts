@@ -228,8 +228,10 @@ export interface Incident {
   sshUser?: string;
   /** Dashboard switches the player can use (DNS panel, provider firewall). */
   controls?: MapControl[];
-  /** Dashboard part of the fix, applied after `fix` for show me and tests. */
+  /** Dashboard part of the fix, applied before `fix` for show me and tests. */
   fixMap?: MapAction[];
+  /** Can show up in On-call mode. `layer` keeps two-at-once pages from hitting the same spot. */
+  oncall?: { layer: "dns" | "firewall" | "proxy" | "app" | "db" | "host" | "ssh" | "ci"; conflicts?: string[] };
 }
 
 export interface Term {
