@@ -13,6 +13,8 @@ interface Actions {
   incident(id: string, score: number, seconds: number, commands: number): void;
   setVar(k: string, v: string): void;
   setMuted(m: boolean): void;
+  /** Record that a flag note was shown at `where` (a step id or terminal run id). */
+  sawFlags(keys: string[], where: string): void;
   replaceAll(p: Progress): void;
   reset(): void;
 }
@@ -36,8 +38,8 @@ const safeStorage = createJSONStorage(() => {
 });
 
 function pick(s: ProgressStore): Progress {
-  const { version, xp, completed, incidents, streak, review, stats, vars, settings, onCall } = s;
-  return { version, xp, completed, incidents, streak, review, stats, vars, settings, onCall };
+  const { version, xp, completed, incidents, streak, review, stats, vars, settings, onCall, flagSeen } = s;
+  return { version, xp, completed, incidents, streak, review, stats, vars, settings, onCall, flagSeen };
 }
 
 export const useProgress = create<ProgressStore>()(
@@ -88,6 +90,18 @@ export const useProgress = create<ProgressStore>()(
         }),
       setVar: (k, v) => set((s) => ({ vars: { ...s.vars, [k]: v } })),
       setMuted: (m) => set((s) => ({ settings: { ...s.settings, muted: m } })),
+      sawFlags: (keys, where) =>
+        set((s) => {
+          let changed = false;
+          const next = { ...s.flagSeen };
+          for (const k of keys) {
+            const list = next[k] ?? [];
+            if (list.includes(where) || list.length >= 3) continue;
+            next[k] = [...list, where];
+            changed = true;
+          }
+          return changed ? { flagSeen: next } : {};
+        }),
       replaceAll: (p) => set({ ...migrateProgress(p) }),
       reset: () => set({ ...emptyProgress() }),
     }),

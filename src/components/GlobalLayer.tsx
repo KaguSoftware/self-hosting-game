@@ -2,6 +2,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TERMS } from "@/content/dictionary";
+import { FLAGS } from "@/content/flags";
 import { useUi } from "@/store/ui";
 import { startCloudSync } from "@/store/cloud";
 import { hydrateProgress } from "@/store/progress";
@@ -81,6 +82,16 @@ function Toasts() {
 function Dictionary() {
   const { dictOpen, dictQuery, closeDict } = useUi();
   const [q, setQ] = useState(dictQuery);
+  const [tab, setTab] = useState<"words" | "flags">("words");
+  const flagGroups = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const groups = new Map<string, typeof FLAGS>();
+    for (const f of FLAGS) {
+      if (s && !`${f.cmd} ${f.flag} ${f.means}`.toLowerCase().includes(s)) continue;
+      groups.set(f.cmd, [...(groups.get(f.cmd) ?? []), f]);
+    }
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [q]);
   useEffect(() => setQ(dictQuery), [dictQuery, dictOpen]);
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -111,6 +122,20 @@ function Dictionary() {
                 ✕
               </button>
             </div>
+            <div className="flex gap-1 px-3 pt-3" role="tablist">
+              {(["words", "flags"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t}
+                  onClick={() => setTab(t)}
+                  className={`rounded-md px-3 py-1.5 text-[13px] transition ${tab === t ? "bg-ink text-bg" : "text-muted hover:text-ink"}`}
+                >
+                  {t === "words" ? "Words" : "Flags (-h, -la...)"}
+                </button>
+              ))}
+            </div>
             <div className="p-3">
               <input
                 autoFocus
@@ -120,6 +145,28 @@ function Dictionary() {
                 className="w-full rounded-lg border border-line2 bg-bg px-3 py-2 font-mono text-[13px] outline-none focus:border-amber"
               />
             </div>
+            {tab === "flags" && (
+              <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-6 scroll-thin">
+                <p className="text-[13px] leading-snug text-muted">
+                  Flags are the extra bits after a command that change how it works. They start with a dash. Several one-letter flags can be glued together: <code className="font-mono text-ink">ls -la</code> is <code className="font-mono text-ink">ls -l -a</code>.
+                </p>
+                {flagGroups.map(([cmd, fs]) => (
+                  <div key={cmd} className="rounded-lg border border-line bg-bg2/60 p-3">
+                    <div className="mb-1.5 font-mono text-[14px] font-semibold text-ink">{cmd}</div>
+                    <ul className="space-y-1">
+                      {fs.map((f) => (
+                        <li key={f.flag} className="flex gap-2 text-[13px] leading-snug">
+                          <code className="min-w-14 shrink-0 whitespace-nowrap font-mono text-ink">{f.flag}</code>
+                          <span className="text-ink/80">{f.means}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {!flagGroups.length && <p className="font-mono text-[13px] text-muted">Nothing found.</p>}
+              </div>
+            )}
+            {tab === "words" && (
             <div className="flex-1 space-y-2 overflow-y-auto px-3 pb-6 scroll-thin">
               {list.map((t) => (
                 <div key={t.id} className="rounded-lg border border-line bg-bg2/60 p-3">
@@ -138,6 +185,7 @@ function Dictionary() {
               ))}
               {!list.length && <p className="font-mono text-[13px] text-muted">Nothing found.</p>}
             </div>
+            )}
           </motion.aside>
         </>
       )}

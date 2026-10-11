@@ -1,9 +1,11 @@
 "use client";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Intel, Step } from "@/content/schema";
 import { termById } from "@/content/dictionary";
 import { useUi } from "@/store/ui";
+import { flagsInProse } from "@/content/flags";
+import FlagNotes from "./FlagNotes";
 import { sfx } from "@/lib/sfx";
 
 export interface TaskResult {
@@ -35,12 +37,12 @@ export function MissionCard({ step, index, total }: { step: Step; index: number;
         </div>
         <h2 className="text-balance text-[19px] font-semibold leading-snug text-ink md:text-[20px]">{step.mission}</h2>
       </div>
-      {step.intel && <IntelCard intel={step.intel} />}
+      {step.intel && <IntelCard intel={step.intel} stepId={step.id} />}
     </div>
   );
 }
 
-export function IntelCard({ intel }: { intel: Intel }) {
+export function IntelCard({ intel, stepId }: { intel: Intel; stepId: string }) {
   const openDict = useUi((s) => s.openDict);
   return (
     <motion.div
@@ -57,6 +59,7 @@ export function IntelCard({ intel }: { intel: Intel }) {
         ))}
       </div>
       {intel.analogy && <p className="mt-2 max-w-[68ch] text-[14px] italic leading-relaxed text-muted">{intel.analogy}</p>}
+      <FlagNotes notes={intel.lines.flatMap(flagsInProse)} where={stepId} className="mt-2.5 border-t border-line pt-2.5" />
       {intel.terms?.length ? (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {intel.terms.map((t) => {
@@ -216,5 +219,36 @@ export function Btn({
     >
       {children}
     </button>
+  );
+}
+
+/** Press 1, 2, 3... to pick option 1, 2, 3... (ignored while typing in a field). */
+export function useNumberKeys(count: number, onPick: (index: number) => void, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= count) {
+        e.preventDefault();
+        onPick(n - 1);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  });
+}
+
+/** The number shown on an answer, matching the key that picks it. */
+export function OptionKey({ n }: { n: number }) {
+  return (
+    <span
+      aria-hidden
+      className="mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-line2 font-mono text-[11.5px] font-semibold leading-none text-muted"
+    >
+      {n}
+    </span>
   );
 }

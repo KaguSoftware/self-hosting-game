@@ -239,7 +239,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
         <div className="flex items-center gap-1.5 text-[12px]">
           {play.combo >= 2 && (
             <span className="rounded-md bg-panel2 px-2 py-1 font-mono text-ink" title="Right answers in a row multiply your XP">
-              combo {play.combo} · x{comboMultiplier(play.combo)}
+              {play.combo} in a row{comboMultiplier(play.combo) > 1 ? ` · XP x${comboMultiplier(play.combo)}` : ""}
             </span>
           )}
           <span className="hidden px-1 font-mono text-muted sm:inline">+{levelXp} XP</span>
@@ -352,7 +352,7 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                     {verdictTitle}
                   </div>
                   <div className="mt-0.5 font-mono text-[12px] text-muted">
-                    +{result.xp} XP{play.combo >= 2 ? ` · combo x${comboMultiplier(play.combo)}` : ""}
+                    +{result.xp} XP{play.combo >= 2 ? ` · ${play.combo} in a row` : ""}{comboMultiplier(play.combo) > 1 ? ` (XP x${comboMultiplier(play.combo)})` : ""}
                   </div>
                 </div>
               </div>

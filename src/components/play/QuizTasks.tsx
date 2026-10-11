@@ -9,11 +9,9 @@ import { usePlay } from "@/store/play";
 import { sfx } from "@/lib/sfx";
 import { hashHex } from "@/sim/util";
 import { writeConfig } from "@/engine/replay";
-import { Btn, HintBar, type TaskCallbacks } from "./common";
+import { Btn, HintBar, OptionKey, useNumberKeys, type TaskCallbacks } from "./common";
 
 type Of<K extends Task["kind"]> = Extract<Task, { kind: K }>;
-
-const letters = "ABCDEFGH";
 
 // ---------------- predict ----------------
 
@@ -41,6 +39,8 @@ export function PredictTask({ step, task, cb, done }: { step: Step; task: Of<"pr
     );
   }
 
+  useNumberKeys(task.options.length, choose, pick === null && !done);
+
   return (
     <div className="space-y-3">
       <p className="text-[15px] font-medium text-ink">{task.question}</p>
@@ -64,13 +64,13 @@ export function PredictTask({ step, task, cb, done }: { step: Step; task: Of<"pr
                       : "border-line opacity-50"
               }`}
             >
-              <span className="mt-px font-display text-[18px] leading-none text-amber/80">{letters[i]}</span>
+              <OptionKey n={i + 1} />
               <span>{o}</span>
             </motion.button>
           );
         })}
       </div>
-      {pick === null && <p className="font-mono text-[11px] text-faint">Commit to a guess. Then watch it play out.</p>}
+      {pick === null && <p className="text-[12px] text-faint">Tap an answer, or press {task.options.map((_, i) => i + 1).join(", ")} on your keyboard.</p>}
     </div>
   );
 }
@@ -378,11 +378,25 @@ export function RapidTask({ task, cb, done }: { step: Step; task: Of<"rapid">; c
     }, ok ? 380 : 900);
   }
 
+  useNumberKeys(q?.options.length ?? 0, answer, started && !over && !fb && !done);
+  useEffect(() => {
+    if (started || done) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        sfx.tap();
+        setStarted(true);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [started, done]);
+
   if (!started) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-xl border border-line bg-panel/60 p-6 text-center">
         <div className="font-display text-5xl text-amber glow">{task.seconds}s</div>
-        <p className="text-[14px] text-muted">{task.items.length} quick questions. Speed builds your combo.</p>
+        <p className="text-[14px] text-muted">{task.items.length} quick questions. Speed builds your combo. Answer with 1, 2, 3 on your keyboard.</p>
         <Btn
           onClick={() => {
             sfx.tap();
@@ -426,11 +440,12 @@ export function RapidTask({ task, cb, done }: { step: Step; task: Of<"rapid">; c
                 key={o}
                 type="button"
                 onClick={() => answer(i)}
-                className={`rounded-lg border px-3 py-2.5 text-left text-[14px] transition ${
+                className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-[14px] transition ${
                   fb && i === q.answer ? "border-teal bg-teal/10 text-teal" : fb && fb.i === i ? "border-red bg-red/10 text-red" : "border-line2 bg-panel hover:border-amber"
                 }`}
               >
-                {o}
+                <OptionKey n={i + 1} />
+                <span>{o}</span>
               </button>
             ))}
           </div>

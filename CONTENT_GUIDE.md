@@ -31,7 +31,17 @@ Before writing `taught`, open the cited step and check it really says it. Prefer
 
 When a new world brings new words, add them to `jargon.ts` first. The test then shows every place that needs an explanation.
 
-### 3. Other checks already in place
+### 3. Flags are explained too
+
+Flags are the `-h`, `-la`, `--now` bits after a command. Every flag the game uses must be in `src/content/flags.ts` with a plain meaning (`src/content/flags.test.ts` fails otherwise). Combined one-letter flags are split automatically: `ls -la` is explained as `-l` and `-a`.
+
+- The first three times a player sees a flag, a note explains it under the intel card, under the "Type this" buttons, or in the terminal when they run it. Progress tracks this in `flagSeen`.
+- A flag inside a question, answer or quiz item must have been shown in an earlier "Type this" box or intel card (or in the same step's), so its note was seen first.
+- The dictionary has a Flags tab built from the same list.
+
+When a new world uses a new flag, add it to `flags.ts`.
+
+### 4. Other checks already in place
 
 - Intel cards: at most 3 short lines. Under about 60 words of reading before any action.
 - No more than two steps of the same kind in a row.

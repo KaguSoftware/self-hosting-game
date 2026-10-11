@@ -148,6 +148,7 @@ export default function IncidentTask({ incident, cb, done }: { incident: Inciden
       </div>
 
       <Terminal
+        stepId={`incident:${incident.id}`}
         allowConsole={incident.console}
         disabled={phase === "fixed" || busy}
         onCommand={(r) => {

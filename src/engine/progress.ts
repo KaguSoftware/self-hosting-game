@@ -18,6 +18,8 @@ export const ProgressZ = z.object({
   vars: z.record(z.string(), z.string()),
   settings: z.object({ muted: z.boolean() }),
   onCall: z.object({ best: z.number(), runs: z.number() }),
+  /** Where each flag ("ls -la") was explained, so notes stop after 3 showings. */
+  flagSeen: z.record(z.string(), z.array(z.string())),
 });
 
 export type Progress = z.infer<typeof ProgressZ>;
@@ -34,6 +36,7 @@ export function emptyProgress(): Progress {
     vars: {},
     settings: { muted: false },
     onCall: { best: 0, runs: 0 },
+    flagSeen: {},
   };
 }
 
@@ -105,5 +108,8 @@ export function mergeProgress(a: Progress, b: Progress): Progress {
     review: [...reviewIds.values()],
     vars: { ...b.vars, ...a.vars },
     onCall: { best: Math.max(a.onCall.best, b.onCall.best), runs: Math.max(a.onCall.runs, b.onCall.runs) },
+    flagSeen: Object.fromEntries(
+      [...new Set([...Object.keys(a.flagSeen), ...Object.keys(b.flagSeen)])].map((k) => [k, [...new Set([...(a.flagSeen[k] ?? []), ...(b.flagSeen[k] ?? [])])].slice(0, 3)]),
+    ),
   };
 }

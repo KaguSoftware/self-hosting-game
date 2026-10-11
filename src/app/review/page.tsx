@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import TopBar from "@/components/TopBar";
-import { Btn } from "@/components/play/common";
+import { Btn, OptionKey, useNumberKeys } from "@/components/play/common";
 import { QUIZ } from "@/content";
 import { dayKey, dueCards } from "@/engine/rules";
 import { useProgress } from "@/store/progress";
@@ -39,6 +39,8 @@ export default function ReviewPage() {
       sfx.success();
     } else sfx.error();
   }
+
+  useNumberKeys(q?.options.length ?? 0, answer, !!q && pick === null);
 
   function next() {
     setPick(null);
@@ -97,7 +99,10 @@ export default function ReviewPage() {
                             : "border-line opacity-50"
                     }`}
                   >
-                    {o}
+                    <span className="flex items-start gap-3">
+                      <OptionKey n={n + 1} />
+                      <span>{o}</span>
+                    </span>
                   </button>
                 ))}
               </div>

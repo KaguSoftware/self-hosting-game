@@ -5,8 +5,13 @@ import { usePlay } from "@/store/play";
 import { sfx } from "@/lib/sfx";
 import { CONSOLE_FRAME } from "@/engine/play";
 import NanoEditor from "./NanoEditor";
+import { describeFlag, flagsIn } from "@/content/flags";
+import { useProgress } from "@/store/progress";
+import { FLAG_SHOWINGS } from "../play/FlagNotes";
 
 export interface TerminalProps {
+  /** Current step or incident id, so flag notes are not repeated within it. */
+  stepId?: string;
   chips?: string[];
   allowConsole?: boolean;
   onCommand?: (r: { code: number; isErrorish: boolean; line: string }) => void;
@@ -22,7 +27,7 @@ const kindClass: Record<string, string> = {
   sys: "text-muted italic",
 };
 
-export default function Terminal({ chips = [], allowConsole, onCommand, disabled, height = "h-[34vh] md:h-[min(36vh,340px)]" }: TerminalProps) {
+export default function Terminal({ stepId = "terminal", chips = [], allowConsole, onCommand, disabled, height = "h-[34vh] md:h-[min(36vh,340px)]" }: TerminalProps) {
   const { state, active, lines, editor } = usePlay();
   const run = usePlay((s) => s.run);
   const [input, setInput] = useState("");
@@ -61,7 +66,24 @@ export default function Terminal({ chips = [], allowConsole, onCommand, disabled
     setHistIdx(null);
     const r = run(text);
     setInput("");
+    if (!pending) explainFlags(text);
     if (r) onCommand?.({ ...r, line: text });
+  }
+
+  /** The first few times you run a flag, say what it means right in the terminal. */
+  function explainFlags(text: string) {
+    const prog = useProgress.getState();
+    const fresh = flagsIn(text).filter((n) => {
+      const list = prog.flagSeen[n.key] ?? [];
+      return n.parts.length && list.length < FLAG_SHOWINGS && !list.includes(stepId);
+    });
+    const unique = fresh.filter((n, i) => fresh.findIndex((x) => x.key === n.key) === i);
+    if (!unique.length) return;
+    for (const n of unique) usePlay.getState().sys(`${n.cmd} ${n.flag}: ${n.parts.length > 1 ? describeFlag(n) : n.parts[0].means}`);
+    prog.sawFlags(
+      unique.map((n) => n.key),
+      `run:${stepId}:${Date.now()}`,
+    );
   }
 
   function onKey(e: React.KeyboardEvent<HTMLInputElement>) {

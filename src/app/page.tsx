@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { LEVELS, UPCOMING, WORLDS } from "@/content";
+import { describeFlag, flagsInProse } from "@/content/flags";
 import type { WorldDef } from "@/content/schema";
 import TopBar from "@/components/TopBar";
 import { useProgress } from "@/store/progress";
@@ -197,6 +198,13 @@ export default function Home() {
                   <li key={c.cmd} className="rounded-lg border border-line bg-bg2/60 p-2">
                     <code className="block font-mono text-[12.5px] text-amber">{c.cmd}</code>
                     <span className="text-[13px] text-ink/85">{c.what}</span>
+                    {flagsInProse(c.cmd)
+                      .filter((n) => n.parts.length)
+                      .map((n) => (
+                        <span key={n.key} className="mt-0.5 block text-[12px] text-muted">
+                          <code className="font-mono text-ink/80">{n.flag}</code> {n.parts.length > 1 ? describeFlag(n) : n.parts[0].means}
+                        </span>
+                      ))}
                   </li>
                 ))}
               </ul>

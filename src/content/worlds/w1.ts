@@ -268,9 +268,9 @@ export const world1: WorldDef = {
           review: {
             id: "w1-05-b-q",
             q: "Which command shows RAM?",
-            options: ["df -h", "free -h", "nproc"],
+            options: ["pwd", "free -h", "nproc"],
             answer: 1,
-            why: "free = memory. df = disk.",
+            why: "free shows memory (RAM). nproc counts CPUs.",
             tag: "linux-health",
           },
           after: "2 CPUs. free shows memory (RAM). Gi is about a gigabyte.",
