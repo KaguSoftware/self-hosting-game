@@ -135,15 +135,23 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
     else sfx.fanfare();
   }
 
-  // Enter continues
+  // Enter continues. Ctrl+Enter (Cmd+Enter on a Mac) works even from the terminal, and on the
+  // level summary it goes straight to the next level.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Enter") return;
+      const force = e.ctrlKey || e.metaKey;
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (!force && (tag === "INPUT" || tag === "TEXTAREA")) return;
       if (result && !summary) {
         e.preventDefault();
         next();
+      } else if (force && summary) {
+        const nl = nextLevel(level.id);
+        if (nl) {
+          e.preventDefault();
+          router.push(`/play/${nl.id}`);
+        }
       }
     };
     window.addEventListener("keydown", h);
@@ -407,7 +415,9 @@ export default function LevelPlayer({ levelId }: { levelId: string }) {
                   </Btn>
                 )}
                 {nl && (
-                  <Btn onClick={() => router.push(`/play/${nl.id}`)}>Next: {nl.title}</Btn>
+                  <Btn onClick={() => router.push(`/play/${nl.id}`)}>
+                    Next: {nl.title} <span className="ml-1 font-mono text-[12px] opacity-60">Ctrl ↵</span>
+                  </Btn>
                 )}
                 <Btn kind="ghost" onClick={() => router.push("/")}>
                   Back to the path

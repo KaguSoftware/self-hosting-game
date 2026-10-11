@@ -88,6 +88,8 @@ export default function Terminal({ stepId = "terminal", chips = [], allowConsole
 
   function onKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
+      // Ctrl+Enter means "next", handled by the level player. Do not run a command.
+      if (e.ctrlKey || e.metaKey) return;
       e.preventDefault();
       submit(input);
       return;

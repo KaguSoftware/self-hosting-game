@@ -1,6 +1,6 @@
 # Build plan: Worlds 4 to 12
 
-This is the plan any chat can follow to keep building the game. Read it, `CONTENT_GUIDE.md` and `CLAUDE.md` before touching code.
+This is the plan any chat can follow to keep building the game. Read it, `CONTENT_GUIDE.md`, `CLAUDE.md` and `LEVEL_DESIGNS.md` (step-by-step designs for each world, plus code facts) before touching code.
 
 ## What exists (done)
 
