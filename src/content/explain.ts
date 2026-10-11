@@ -139,6 +139,21 @@ const FLAG_VALUE: Record<string, (v: string) => string> = {
   "ssh -i": (v) => `the private key file to use: ${v}`,
   "ssh -p": (v) => `the port to connect to: ${v}`,
   "ssh-copy-id -i": (v) => `which public key to copy: ${v}`,
+  "ssh -L": (v) => {
+    const [lp, h, rp] = v.split(":");
+    return `laptop port ${lp} leads to ${h}${h === "127.0.0.1" ? " (as seen from the server: the server itself)" : ""} port ${rp}`;
+  },
+  "psql -U": (v) => `the database user: ${v}`,
+  "psql -d": (v) => `the database: ${v}`,
+  "psql -h": (v) => `the machine: ${v}${v === "127.0.0.1" ? " (your end of the tunnel)" : ""}`,
+  "psql -p": (v) => `the port: ${v}`,
+  "psql -c": () => "the statement to run, in quotes",
+  "pg_dump -n": (v) => `the schema: ${v}${v === "public" ? " (your own tables, not Supabase's extras)" : ""}`,
+  "pg_dump -f": (v) => `the file to write: ${v}`,
+  "pg_restore -h": (v) => `the machine: ${v}${v === "127.0.0.1" ? " (your end of the tunnel)" : ""}`,
+  "pg_restore -p": (v) => `the port: ${v}`,
+  "pg_restore -U": (v) => `the database user: ${v}`,
+  "pg_restore -d": (v) => `the database to load into: ${v}`,
   "sudo -u": (v) => `the user to run as: ${v}`,
   "usermod -G": (v) => `the group: ${v}${v === "sudo" ? " (members may use sudo)" : v === "docker" ? " (members may use docker, which is as strong as root)" : ""}`,
   "useradd -G": (v) => `the extra group: ${v}`,
@@ -286,6 +301,7 @@ const FOLDERS: [RegExp, string][] = [
   [/(^|\/)compose\.ya?ml$/, "the compose file: every service of the shop"],
   [/(^|\/)Dockerfile$/, "the recipe for the app's image"],
   [/\.sh$/, "a script: a file of commands to run in order"],
+  [/\.dump$/, "a database dump: a whole database copied into one file"],
 ];
 
 function pathMeaning(p: string): string {
@@ -345,6 +361,7 @@ function argMeaning(cmd: string, sub: string | undefined, a: string, prev: strin
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) return `sets ${a.split("=")[0]} to "${a.slice(a.indexOf("=") + 1)}" just for this command`;
   if (/^\$\(/.test(a)) return "runs the command inside $( ) first and puts its output here";
   if (/^\$\{?\w+/.test(a)) return `the value of the variable ${a.replace(/[${}]/g, "")}`;
+  if (/^["']?postgres(ql)?:\/\//.test(a)) return "a connection string: user, password, machine, port and database in one line (in quotes so the shell leaves it alone)";
   if (cmd === "sed" && /^(['"])s(.)/.test(a)) {
     const d = a[2];
     const [, from, to] = a.slice(1, -1).split(d);

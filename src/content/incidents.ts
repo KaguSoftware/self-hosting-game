@@ -339,6 +339,55 @@ INCIDENTS.push(
   },
 );
 
+// ---------- World 7 ----------
+INCIDENTS.push({
+  id: "db-port-public",
+  oncall: { layer: "db", conflicts: ["db-localhost"] },
+  title: "The database is on the internet",
+  client: {
+    name: "A security scanner",
+    message: "Your server 203.0.113.10 has PostgreSQL open to the internet on port 5432. Bots are already trying passwords. (Sam opened it 'so the analytics tool can connect'.)",
+  },
+  after: "w7-07",
+  start: "vps-deploy",
+  breakIt: (w) => {
+    const f = getFile(w.hosts.vps, "/srv/crumb/compose.yaml");
+    if (f) f.content = f.content.replace('"127.0.0.1:5432:5432"', '"5432:5432"');
+    if (!w.provider.firewall.rules.some((r) => r.port === 5432)) w.provider.firewall.rules.push({ port: 5432, source: "0.0.0.0/0" });
+    runDetached(w, DEPLOY_SHOP, "docker compose up -d");
+    advance(w, w.clock + 10);
+  },
+  goals: [
+    { describe: "Postgres cannot be reached from the internet", check: P.dbNotPublic },
+    { describe: "The provider firewall no longer opens 5432", check: P.not(P.providerOpen(5432)) },
+    { describe: "The app still reaches the database", check: P.appReachesDb("app") },
+  ],
+  hints: [
+    "Two doors are open: the compose file publishes 5432 on every address, and the provider firewall lets it in.",
+    "Close 5432 in the dashboard. Then put \"127.0.0.1:5432:5432\" back in compose.yaml and docker compose up -d.",
+  ],
+  fastestPath: [
+    "grep -n 5432 /srv/crumb/compose.yaml   → \"5432:5432\" (every address)",
+    "Provider dashboard: 5432 is open. Turn it off",
+    "sed -i 's/\"5432:5432\"/\"127.0.0.1:5432:5432\"/' compose.yaml",
+    "docker compose up -d",
+  ],
+  fix: ["cd /srv/crumb", "sed -i 's/\"5432:5432\"/\"127.0.0.1:5432:5432\"/' compose.yaml", "docker compose up -d"],
+  fixMap: [{ type: "pfwRule", port: 5432, on: false }],
+  controls: [
+    { node: "pfw", label: "22", on: { type: "pfwRule", port: 22, on: true }, off: { type: "pfwRule", port: 22, on: false } },
+    { node: "pfw", label: "80", on: { type: "pfwRule", port: 80, on: true }, off: { type: "pfwRule", port: 80, on: false } },
+    { node: "pfw", label: "443", on: { type: "pfwRule", port: 443, on: true }, off: { type: "pfwRule", port: 443, on: false } },
+    { node: "pfw", label: "5432", on: { type: "pfwRule", port: 5432, on: true }, off: { type: "pfwRule", port: 5432, on: false } },
+  ],
+  debrief: [
+    "A database should never face the internet. Bots find it within minutes.",
+    "Docker publishes skip ufw, so the compose file and the provider firewall are the doors that matter.",
+    "Tools that need the database can use an SSH tunnel instead.",
+  ],
+  timeLimit: 300,
+});
+
 export function incidentById(id: string): Incident | undefined {
   return INCIDENTS.find((i) => i.id === id);
 }

@@ -63,4 +63,11 @@ export const JARGON: { term: string; re: RegExp }[] = [
   { term: "Let's Encrypt", re: /Let's Encrypt/ },
   { term: "Caddyfile", re: /\bCaddyfile\b/ },
   { term: "site block", re: /\bsite blocks?\b/i },
+  // World 7
+  { term: "RLS", re: /\bRLS\b/ },
+  { term: "connection string", re: /\bconnection strings?\b/i },
+  { term: "psql", re: /\bpsql\b/ },
+  { term: "migration", re: /\bmigrations?\b/i },
+  { term: "SSH tunnel", re: /\btunnels?\b/i },
+  { term: "pg_dump", re: /\bpg_dump\b/ },
 ];
