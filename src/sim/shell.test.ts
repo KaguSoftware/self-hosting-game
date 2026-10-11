@@ -72,7 +72,7 @@ describe("runner extras", () => {
     registerReconciler("test-counter", () => {});
   });
   it("runDetached runs on a draft with no terminal", () => {
-    const w = produce(produce(createWorld(), (d) => rentVps(d)), (d) => {
+    const w = produce(produce(createWorld(), (d) => rentVps(d)), (d: World) => {
       const r = runDetached(d, { host: "vps", user: "root", cwd: "/root", via: "local" }, "echo hi > /root/from-cron.txt");
       expect(r.code).toBe(0);
     });

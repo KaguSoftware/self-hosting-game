@@ -1,9 +1,11 @@
 // Goal predicates. Levels check the resulting STATE, never exact commands.
 import { getDir, getFile, userGroups } from "./fs";
-import { providerAllows, traceHttp, ufwAllows as ufwAllowsPort } from "./net";
+import { appToDb, providerAllows, traceHttp, ufwAllows as ufwAllowsPort } from "./net";
 import { sshCheck } from "./sshAuth";
 import { runningSshd } from "./sshd";
-import type { HopId, HostId, Shell, World } from "./types";
+import type { Container, HopId, Host, HostId, Shell, World } from "./types";
+import { localImage } from "./docker/images";
+import { dockerInstalled as engineInstalled } from "./docker/runtime";
 
 export interface LogEntry {
   line: string;
@@ -180,3 +182,92 @@ export const flag =
   (name: string, value: string | number | boolean = true): Check =>
   (g) =>
     g.world.flags[name] === value;
+
+// ---------- docker ----------
+
+/** A container by name, or by compose service name (a running one wins). */
+export function findDockerContainer(host: Host, serviceOrName: string): Container | undefined {
+  const cs = Object.values(host.docker.containers);
+  const byName = cs.find((c) => c.name === serviceOrName);
+  if (byName) return byName;
+  const bySvc = cs.filter((c) => c.service === serviceOrName);
+  return bySvc.find((c) => c.status === "running") ?? bySvc[0];
+}
+
+const vpsHost = (g: GoalCtx) => g.world.hosts.vps;
+
+/** The Docker engine is installed and its service is running. */
+export const dockerInstalled: Check = (g) => engineInstalled(vpsHost(g)) && vpsHost(g).services.docker?.state === "active";
+
+export const containerRunning =
+  (serviceOrName: string): Check =>
+  (g) =>
+    findDockerContainer(vpsHost(g), serviceOrName)?.status === "running";
+
+/** No container with this name or service exists, in any state. */
+export const containerAbsent =
+  (name: string): Check =>
+  (g) =>
+    !findDockerContainer(vpsHost(g), name);
+
+export const containerHealthy =
+  (service: string): Check =>
+  (g) => {
+    const c = findDockerContainer(vpsHost(g), service);
+    return c?.status === "running" && c.health === "healthy";
+  };
+
+export const imagePresent =
+  (ref: string): Check =>
+  (g) =>
+    !!localImage(vpsHost(g), ref);
+
+/** A volume with exactly this name, or a compose one ending in _name (pgdata matches crumb_pgdata). */
+export const volumeExists =
+  (name: string): Check =>
+  (g) =>
+    Object.keys(vpsHost(g).docker.volumes).some((v) => v === name || v.endsWith(`_${name}`));
+
+export const volumeAbsent =
+  (name: string): Check =>
+  (g) =>
+    !volumeExists(name)(g);
+
+export const restartPolicy =
+  (service: string, p: Container["restart"]): Check =>
+  (g) =>
+    findDockerContainer(vpsHost(g), service)?.restart === p;
+
+/** No container publishes a port to the host, except the listed containers or services. */
+export const noPublishedPorts =
+  (except: string[] = []): Check =>
+  (g) =>
+    Object.values(vpsHost(g).docker.containers).every(
+      (c) => !c.ports.length || except.includes(c.name) || (!!c.service && except.includes(c.service)),
+    );
+
+/** The process inside binds this address ("0.0.0.0", "127.0.0.1"). */
+export const listensOn =
+  (service: string, addr: string): Check =>
+  (g) => {
+    const c = findDockerContainer(vpsHost(g), service);
+    return c?.status === "running" && c.listenAddr === addr;
+  };
+
+/** The app's DATABASE_URL reaches a running database container. */
+export const appReachesDb =
+  (service: string): Check =>
+  (g) => {
+    const c = findDockerContainer(vpsHost(g), service);
+    if (!c || c.status !== "running") return false;
+    const r = appToDb(vpsHost(g), c);
+    return r.ok && r.hop === "db";
+  };
+
+/** A NEXT_PUBLIC_* (or any) value was frozen into the image at build time. */
+export const imageBaked =
+  (ref: string, key: string, value?: string): Check =>
+  (g) => {
+    const baked = localImage(vpsHost(g), ref)?.meta?.baked ?? {};
+    return value === undefined ? key in baked : baked[key] === value;
+  };

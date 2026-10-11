@@ -45,3 +45,18 @@ export function hhmmss(t: number): string {
   const x = d(t);
   return `${p2(x.getUTCHours())}:${p2(x.getUTCMinutes())}:${p2(x.getUTCSeconds())}`;
 }
+
+/** "2026-10-11T09:02:11.000000000Z" (docker inspect style) */
+export function isoTime(t: number): string {
+  return d(t).toISOString().replace(/\.(\d{3})Z$/, ".$1000000Z");
+}
+
+/** "2026-10-11 09:02:11.000 UTC" (Postgres log style) */
+export function pgTime(t: number): string {
+  return d(t).toISOString().replace("T", " ").replace("Z", " UTC");
+}
+
+/** Unix seconds, for JSON log lines ("ts":1760173331). */
+export function unixTime(t: number): number {
+  return Math.floor((BASE + t * 1000) / 1000);
+}

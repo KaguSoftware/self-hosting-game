@@ -1,5 +1,5 @@
 import { HOME_PUBLIC_IP, HOST_KEY_FP } from "../../constants";
-import { dir, file, getDir, getFile, put, readText, writeFile } from "../../fs";
+import { dir, file, getDir, getFile, put, readText, userGroups, writeFile } from "../../fs";
 import { resolveName } from "../../net";
 import { keyBody, sshCheck, type SshCheck } from "../../sshAuth";
 import { parseSshd, sshdDump } from "../../sshd";
@@ -116,7 +116,7 @@ function login(ctx: Ctx, o: SshOpts, method: "publickey" | "password") {
   vps.journal.push({ t: ctx.w.clock, unit: "ssh", msg: `Accepted ${method} for ${o.user} from ${HOME_PUBLIC_IP} port 51234${fp}` });
   vps.journal.push({ t: ctx.w.clock, unit: "ssh", msg: `pam_unix(sshd:session): session opened for user ${o.user}(uid=${u.uid}) by ${o.user}(uid=0)` });
   ctx.out(motd(ctx));
-  ctx.sh.frames.push({ host: "vps", user: o.user, cwd: u.home, via: "ssh", remote: o.target });
+  ctx.sh.frames.push({ host: "vps", user: o.user, cwd: u.home, via: "ssh", remote: o.target, loginGroups: userGroups(vps, o.user) });
   ctx.emit.trace = { ...(ctx.emit.trace ?? sshCheck(ctx.w, ctx.realUser, o.user, o.target).trace), ok: true };
 }
 

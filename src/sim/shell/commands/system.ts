@@ -401,7 +401,7 @@ export const su: Command = {
       return 1;
     }
     if (ctx.user === "root") {
-      ctx.sh.frames.push({ host: ctx.frame.host, user: target, cwd: u.home, via: "su" });
+      ctx.sh.frames.push({ host: ctx.frame.host, user: target, cwd: u.home, via: "su", loginGroups: userGroups(ctx.host, target) });
       return 0;
     }
     ctx.prompt({ prompt: "Password: ", secret: true, data: { target } });
@@ -415,7 +415,7 @@ export const su: Command = {
       if (target === "root") ctx.info("Tip: with sudo rights you can use sudo -i instead, with YOUR password.");
       return 1;
     }
-    ctx.sh.frames.push({ host: ctx.frame.host, user: target, cwd: u.home, via: "su" });
+    ctx.sh.frames.push({ host: ctx.frame.host, user: target, cwd: u.home, via: "su", loginGroups: userGroups(ctx.host, target) });
     return 0;
   },
 };

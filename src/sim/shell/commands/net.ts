@@ -1,3 +1,6 @@
+import { normalizeRef } from "../../docker/images";
+import { externalUrl } from "../../docker/install";
+import { fsErrorText, writeFile } from "../../fs";
 import { isIp, resolveName, traceHttp } from "../../net";
 import { dateTime } from "../../time";
 import type { TraceResult } from "../../types";
@@ -31,12 +34,16 @@ function headers(ctx: Ctx, t: TraceResult, url: string): string[] {
   return lines;
 }
 
-function body(t: TraceResult): string {
+function body(t: TraceResult, ctx: Ctx): string {
   const status = t.status ?? 200;
   if (status === 502) return "";
   if (status === 500) return "Internal Server Error";
   if (t.hops.some((h) => h.node === "svc:hello")) return "<h1>Hello from web-1</h1>";
   if (t.hops.some((h) => h.node.startsWith("svc:nginx"))) return "<h1>Welcome to nginx!</h1>";
+  // A container answering directly (docker run -p 8080:80 nginx).
+  const direct = t.hops.find((h) => h.node.startsWith("c:"));
+  const c = direct && ctx.w.hosts.vps.docker.containers[direct.node.slice(2)];
+  if (c && ctx.w.hosts.vps.docker.images[normalizeRef(c.image)]?.meta?.flavor === "nginx") return "<!DOCTYPE html>\n<html>\n<head>\n<title>Welcome to nginx!</title>";
   return `<!DOCTYPE html><html lang="en"><head><title>Crumb | Fresh bread, daily</title></head><body><main><h1>Crumb</h1>...</main></body></html>`;
 }
 
@@ -48,10 +55,49 @@ export const curl: Command = {
     const head = args.some((a) => a === "-I" || a === "--head" || (/^-[a-zA-Z]+$/.test(a) && a.includes("I")));
     const verbose = args.some((a) => a === "-v" || a === "--verbose" || (/^-[a-zA-Z]+$/.test(a) && a.includes("v")));
     const include = args.some((a) => a === "-i" || (/^-[a-zA-Z]+$/.test(a) && a.includes("i")));
-    let url = args.find((a) => !a.startsWith("-"));
+    const short = (ch: string) => args.some((a) => /^-[a-zA-Z]+$/.test(a) && a.includes(ch));
+    const fail = short("f") || args.includes("--fail");
+    // -s hides errors too, unless -S brings them back.
+    const quietErrors = (short("s") || args.includes("--silent")) && !(short("S") || args.includes("--show-error"));
+    let output: string | undefined;
+    const words: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === "-o" || a === "--output") output = args[++i];
+      else if (/^-[a-zA-Z]*o$/.test(a)) output = args[++i];
+      else if (a.startsWith("--output=")) output = a.slice(9);
+      else if (!a.startsWith("-")) words.push(a);
+    }
+    let url = words[0];
     if (!url) {
       ctx.err("curl: try 'curl --help' for more information");
       return 2;
+    }
+    if (short("O") && !output) output = url.replace(/[?#].*$/, "").split("/").pop() || "index.html";
+    const err = (s: string) => {
+      if (!quietErrors) ctx.err(s);
+    };
+    const save = (bodyText: string): number => {
+      if (output === undefined || output === "-") {
+        ctx.out(bodyText.replace(/\n$/, ""));
+        return 0;
+      }
+      const e = writeFile(ctx.host, ctx.user, ctx.path(output), bodyText);
+      if (e) {
+        if (!quietErrors) ctx.err(`Warning: Failed to open the file ${output}: ${fsErrorText(e)}`);
+        err(`curl: (23) Failure writing output to destination, passed ${bodyText.length} returned 4294967295`);
+        return 23;
+      }
+      return 0;
+    };
+    // Files out on the internet (install scripts, signing keys).
+    const external = externalUrl(url);
+    if (external !== undefined) {
+      if (head) {
+        ctx.out(`HTTP/2 200 \ncontent-type: text/plain; charset=utf-8\ncontent-length: ${external.length}\ndate: ${httpDate(ctx)}`);
+        return 0;
+      }
+      return save(external);
     }
     if (!/^https?:\/\//.test(url)) url = "http://" + url;
     const from = ctx.frame.host === "vps" ? "vps" : "laptop";
@@ -79,21 +125,26 @@ export const curl: Command = {
       ctx.err(v.join("\n"));
     }
     if (t.error) {
-      ctx.err(t.error);
+      err(t.error);
       const m = /curl: \((\d+)\)/.exec(t.error);
       return m ? Number(m[1]) : 7;
     }
     if (t.status === 0) {
-      ctx.err(`curl: (52) Empty reply from server`);
+      err(`curl: (52) Empty reply from server`);
       ctx.info("Something answered, but it does not speak HTTP. Postgres maybe?");
       return 52;
+    }
+    if (fail && (t.status ?? 200) >= 400) {
+      err(`curl: (22) The requested URL returned error: ${t.status}`);
+      return 22;
     }
     const hs = headers(ctx, t, url);
     if (head) ctx.out(hs.join("\n"));
     else {
       if (verbose) ctx.err(hs.map((h) => "< " + h).join("\n"));
       if (include) ctx.out(hs.join("\n") + "\n");
-      const b = body(t);
+      const b = body(t, ctx);
+      if (output !== undefined) return save(b + "\n");
       if (b) ctx.out(b);
     }
     return 0;

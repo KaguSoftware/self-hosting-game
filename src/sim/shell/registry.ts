@@ -1,4 +1,5 @@
 import { APT_COMMANDS } from "./commands/apt";
+import { DOCKER_COMMANDS } from "./commands/docker";
 import { FILE_COMMANDS } from "./commands/files";
 import { NET_COMMANDS } from "./commands/net";
 import { SCRIPT_COMMANDS, sed } from "./commands/scripts";
@@ -21,6 +22,7 @@ const GROUPS: [string, Command[]][] = [
   ["SSH", SSH_COMMANDS],
   ["Network", NET_COMMANDS],
   ["Scripts", SCRIPT_COMMANDS],
+  ["Containers", DOCKER_COMMANDS],
 ];
 
 const help: Command = {
@@ -66,7 +68,7 @@ export const NEEDS_PACKAGE: Record<string, string> = {
 
 /** Commands any one of several packages provides (docker comes from docker-ce or docker.io). */
 export const NEEDS_ANY_PACKAGE: Record<string, string[]> = {
-  docker: ["docker-ce", "docker.io"],
+  docker: ["docker-ce", "docker.io", "docker-ce-cli"],
 };
 
 export const NOT_INSTALLED_HINT: Record<string, string> = {
