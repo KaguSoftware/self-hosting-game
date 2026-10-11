@@ -18,6 +18,7 @@ const dockerSetup = (ctx: Ctx) => dockerPostInstall(ctx.w, ctx.host);
 
 export const CATALOG: Record<string, PkgInfo> = {
   ncdu: { version: "1.19-0.1", section: "universe", sizeKb: 50, deps: [] },
+  rclone: { version: "1.60.1+dfsg-3ubuntu0.24.04.2", section: "universe", sizeKb: 15360, deps: ["fuse3"] },
   htop: { version: "3.3.0-4build1", section: "main", sizeKb: 171, deps: ["libnl-3-200", "libnl-genl-3-200"] },
   tree: { version: "2.1.1-2ubuntu3", section: "universe", sizeKb: 47, deps: [] },
   git: { version: "1:2.43.0-1ubuntu7.1", section: "main", sizeKb: 3680, deps: ["git-man", "liberror-perl"] },

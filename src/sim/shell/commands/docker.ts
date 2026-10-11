@@ -650,6 +650,10 @@ function execInto(ctx: Ctx, c: Container, cmd: string[], workdir?: string): numb
 function cmdExec(ctx: Ctx, args: string[]): number {
   const p = parseFlags(args, ["w", "workdir", "e", "env", "u", "user", "env-file"], ["i", "interactive", "t", "tty", "d", "detach", "privileged"], true);
   if (p.error) return usageError(ctx, "exec", p.error);
+  if (ctx.frame.noTty && has(p, "t", "tty")) {
+    ctx.err("the input device is not a TTY");
+    return 1;
+  }
   if (p.rest.length < 2) {
     ctx.err(`docker: 'docker exec' requires at least 2 arguments\n\nUsage:  docker exec [OPTIONS] CONTAINER COMMAND [ARG...]\n\nSee 'docker exec --help' for more information`);
     return 1;
@@ -1307,6 +1311,11 @@ function compose(ctx: Ctx, args: string[]): number {
       const p = parseFlags(rest, ["w", "workdir", "e", "env", "u", "user", "index"], ["T", "no-TTY", "d", "detach", "i", "interactive", "t", "tty", "privileged"], true);
       if (p.error) return composeUsage(ctx, sub, p.error);
       const [svc, ...cmd] = p.rest;
+      // Compose gives exec a terminal unless you pass -T. Cron and CI have none.
+      if (ctx.frame.noTty && !has(p, "T", "no-TTY")) {
+        ctx.err("the input device is not a TTY");
+        return 1;
+      }
       if (!svc || !cmd.length) {
         ctx.err(`'docker compose exec' requires at least 2 arguments\n\nUsage:  docker compose exec [OPTIONS] SERVICE COMMAND [ARGS...]`);
         return 1;

@@ -23,4 +23,4 @@ export function advance(w: World, to: number): void {
 }
 
 /** Longest single jump `sleep` may make, so a typo cannot skip a week. */
-export const MAX_SLEEP = 3600;
+export const MAX_SLEEP = 86400;

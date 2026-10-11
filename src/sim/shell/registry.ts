@@ -2,6 +2,7 @@ import { APT_COMMANDS } from "./commands/apt";
 import { DOCKER_COMMANDS } from "./commands/docker";
 import { FILE_COMMANDS } from "./commands/files";
 import { NET_COMMANDS } from "./commands/net";
+import { OPS_COMMANDS } from "./commands/ops";
 import { SCRIPT_COMMANDS, sed } from "./commands/scripts";
 import { SSH_COMMANDS } from "./commands/ssh";
 import { SYSTEM_COMMANDS } from "./commands/system";
@@ -12,6 +13,8 @@ import { USER_COMMANDS } from "./commands/users";
 import type { Command } from "./ctx";
 // Registers Caddy's boot, caddy reload and certificate behaviour with the Docker sim.
 import "../docker/caddy";
+// Registers the cron scheduler with the sim clock.
+import "../cron";
 
 const GROUPS: [string, Command[]][] = [
   ["Files", FILE_COMMANDS],
@@ -24,6 +27,7 @@ const GROUPS: [string, Command[]][] = [
   ["SSH", SSH_COMMANDS],
   ["Network", NET_COMMANDS],
   ["Scripts", SCRIPT_COMMANDS],
+  ["Jobs and backups", OPS_COMMANDS],
   ["Containers", DOCKER_COMMANDS],
 ];
 
@@ -59,6 +63,7 @@ export const NEEDS_PACKAGE: Record<string, string> = {
   git: "git",
   rsync: "rsync",
   jq: "jq",
+  rclone: "rclone",
   psql: "postgresql-client",
   pg_dump: "postgresql-client",
   pg_restore: "postgresql-client",

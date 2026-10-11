@@ -214,6 +214,8 @@ export interface World {
   /** Extra images in remote registries (pushed by CI, or placed by a level). */
   registry?: Record<string, RegistryImage>;
   acme?: AcmeState;
+  /** Pretend cloud storage for offsite backups: "remote:bucket" -> path -> object. */
+  storage?: { buckets: Record<string, Record<string, { content: string; sizeBytes: number; at: number }>> };
 }
 
 // ---------- docker ----------
@@ -290,6 +292,8 @@ export interface Frame {
   remote?: string;
   /** Groups as they were at login. New group memberships only count from the next login. */
   loginGroups?: string[];
+  /** No terminal attached (cron, CI): docker exec -t and compose exec without -T fail. */
+  noTty?: boolean;
 }
 
 export interface Pending {

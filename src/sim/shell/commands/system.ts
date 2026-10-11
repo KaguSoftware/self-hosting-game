@@ -1,6 +1,6 @@
 import { nodeSize, userGroups } from "../../fs";
 import { listeners } from "../../net";
-import { dateTime, hhmmss } from "../../time";
+import { dateTime, hhmmss, strftime } from "../../time";
 import type { Host } from "../../types";
 import { pad, padL } from "../../util";
 import { flagSet, type Command, type Ctx } from "../ctx";
@@ -101,8 +101,13 @@ export const uname: Command = {
 
 export const date: Command = {
   name: "date",
-  summary: "current date and time",
+  summary: "current date and time (date +%F for 2026-10-11)",
   run(ctx) {
+    const fmt = ctx.argv.slice(1).find((a) => a.startsWith("+"));
+    if (fmt) {
+      ctx.out(strftime(ctx.w.clock, fmt.slice(1)));
+      return 0;
+    }
     ctx.out(dateTime(ctx.w.clock));
     return 0;
   },

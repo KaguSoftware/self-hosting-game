@@ -56,6 +56,32 @@ export function pgTime(t: number): string {
   return d(t).toISOString().replace("T", " ").replace("Z", " UTC");
 }
 
+/** Calendar fields for cron. Months are 1-12, weekday 0 = Sunday. */
+export function calendar(t: number): { minute: number; hour: number; day: number; month: number; weekday: number; year: number } {
+  const x = d(t);
+  return { minute: x.getUTCMinutes(), hour: x.getUTCHours(), day: x.getUTCDate(), month: x.getUTCMonth() + 1, weekday: x.getUTCDay(), year: x.getUTCFullYear() };
+}
+
+/** date +FORMAT: %F %Y %m %d %H %M %S %s %T %a %b %%. */
+export function strftime(t: number, fmt: string): string {
+  const x = d(t);
+  const map: Record<string, string> = {
+    F: `${x.getUTCFullYear()}-${p2(x.getUTCMonth() + 1)}-${p2(x.getUTCDate())}`,
+    Y: String(x.getUTCFullYear()),
+    m: p2(x.getUTCMonth() + 1),
+    d: p2(x.getUTCDate()),
+    H: p2(x.getUTCHours()),
+    M: p2(x.getUTCMinutes()),
+    S: p2(x.getUTCSeconds()),
+    T: `${p2(x.getUTCHours())}:${p2(x.getUTCMinutes())}:${p2(x.getUTCSeconds())}`,
+    s: String(Math.floor((BASE + t * 1000) / 1000)),
+    a: DAYS[x.getUTCDay()],
+    b: MONTHS[x.getUTCMonth()],
+    "%": "%",
+  };
+  return fmt.replace(/%(.)/g, (m, c) => map[c] ?? m);
+}
+
 /** Unix seconds, for JSON log lines ("ts":1760173331). */
 export function unixTime(t: number): number {
   return Math.floor((BASE + t * 1000) / 1000);

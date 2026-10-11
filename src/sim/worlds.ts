@@ -44,6 +44,29 @@ Subsystem	sftp	/usr/lib/openssh/sftp-server
 export const CLOUD_INIT_SSHD = `PasswordAuthentication yes
 `;
 
+/** A trimmed copy of Ubuntu's file. Security updates only, and no automatic reboot by default. */
+export const UNATTENDED_UPGRADES = `// Automatically upgrade packages from these (origin:archive) pairs
+Unattended-Upgrade::Allowed-Origins {
+\t"\${distro_id}:\${distro_codename}";
+\t"\${distro_id}:\${distro_codename}-security";
+\t"\${distro_id}ESMApps:\${distro_codename}-apps-security";
+\t"\${distro_id}ESM:\${distro_codename}-infra-security";
+//\t"\${distro_id}:\${distro_codename}-updates";
+};
+
+// Remove unused automatically installed kernel-related packages
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+
+// Automatically reboot *WITHOUT CONFIRMATION* if
+//  the file /var/run/reboot-required is found after the upgrade
+//Unattended-Upgrade::Automatic-Reboot "false";
+
+// If automatic reboot is enabled and needed, reboot at the specific
+// time instead of immediately
+//  Default: "now"
+//Unattended-Upgrade::Automatic-Reboot-Time "02:00";
+`;
+
 const OS_RELEASE = `PRETTY_NAME="Ubuntu 24.04.1 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -180,6 +203,7 @@ export function createFreshVps(plan: { cpus: number; memGb: number; diskGb: numb
     "/etc/apt/apt.conf.d/20auto-upgrades",
     file(`APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n`),
   );
+  put(h, "/etc/apt/apt.conf.d/50unattended-upgrades", file(UNATTENDED_UPGRADES));
   put(h, "/var/log/syslog", file("", 0o640, "syslog", "adm", 180_000));
   put(h, "/var/log/auth.log", file("", 0o640, "syslog", "adm", 24_000));
   put(h, "/var/log/journal", dir(0o2755, "root", "systemd-journal"));
